@@ -22,7 +22,7 @@ app.get('/api/health', async (req, res) => {
     const syntax = await Firebase.getSyntax();
     res.json({
         status: 'OK',
-        version: '1.0.3',
+        version: '1.0.4',
         service: 'PMH LINE BOT & Web Admin',
         firebaseConnected: !!syntax,
         timestamp: new Date().toISOString()
@@ -36,22 +36,27 @@ app.get('/webhook', (req, res) => {
 
 // 4. Webhook POST - Tiếp nhận sự kiện từ LINE Messaging API
 app.post('/webhook', async (req, res) => {
-    // Trả lời 200 OK ngay lập tức cho LINE server để không bị timeout
-    res.status(200).send('OK');
-
     const events = req.body.events;
     if (!events || !Array.isArray(events) || events.length === 0) {
-        return;
+        return res.status(200).send('No events');
     }
 
-    // Xử lý song song các sự kiện trong mảng
-    for (const event of events) {
-        try {
-            await handleLineEvent(event);
-        } catch (err) {
-            console.error('[Server] Lỗi khi xử lý sự kiện LINE:', err);
-        }
-    }
+    // Xử lý tất cả sự kiện song song trước khi trả về 200 OK (chuẩn architecture của Botline_nhacviec)
+    await Promise.all(
+        events.map(async (event) => {
+            if (event?.deliveryContext?.isRedelivery) {
+                console.log('[LINE] Bỏ qua sự kiện redelivery:', event.webhookEventId);
+                return;
+            }
+            try {
+                await handleLineEvent(event);
+            } catch (err) {
+                console.error('[Server] Lỗi khi xử lý sự kiện LINE:', err);
+            }
+        })
+    );
+
+    return res.status(200).send('OK');
 });
 
 // 5. Fallback route chuyển về trang quản trị

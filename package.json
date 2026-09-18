@@ -17,6 +17,7 @@
   "author": "PMH ICT",
   "license": "ISC",
   "dependencies": {
+    "@line/bot-sdk": "^11.2.0",
     "axios": "^1.7.9",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

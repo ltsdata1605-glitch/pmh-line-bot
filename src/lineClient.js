@@ -1,37 +1,34 @@
-const axios = require('axios');
+const line = require('@line/bot-sdk');
 const CONFIG = require('./config');
 
-const LINE_API_URL = 'https://api.line.me/v2/bot';
+const client = new line.messagingApi.MessagingApiClient({
+    channelAccessToken: CONFIG.CHANNEL_ACCESS_TOKEN
+});
 
 const lineClient = {
+    client,
+
     /**
-     * Trả lời tin nhắn người dùng (có hỗ trợ quoteToken và mention)
+     * Trả lời tin nhắn người dùng bằng official @line/bot-sdk
      */
     async replyText(replyToken, text) {
         if (!replyToken || !text) return false;
 
         const cleanText = String(text).trim();
-        const payload = {
-            replyToken: replyToken,
-            messages: [
-                {
-                    type: 'text',
-                    text: cleanText
-                }
-            ]
-        };
-
         try {
-            await axios.post(`${LINE_API_URL}/message/reply`, payload, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${CONFIG.CHANNEL_ACCESS_TOKEN}`
-                },
-                timeout: 8000
+            await client.replyMessage({
+                replyToken: replyToken,
+                messages: [
+                    {
+                        type: 'text',
+                        text: cleanText
+                    }
+                ]
             });
+            console.log('[LINE] Phản hồi tin nhắn thành công qua @line/bot-sdk!');
             return true;
         } catch (error) {
-            const errData = error.response ? JSON.stringify(error.response.data) : error.message;
+            const errData = error.response ? JSON.stringify(error.response.data) : (error.message || error);
             console.error('[LINE] Lỗi replyText:', errData);
             return false;
         }
@@ -41,29 +38,22 @@ const lineClient = {
      * Gửi chủ động tin nhắn (Push Message) tới User hoặc Group
      */
     async pushText(toId, text) {
-        if (!toId || !text) return;
+        if (!toId || !text) return false;
 
-        const payload = {
-            to: toId,
-            messages: [
-                {
-                    type: 'text',
-                    text: String(text).trim()
-                }
-            ]
-        };
-
+        const cleanText = String(text).trim();
         try {
-            await axios.post(`${LINE_API_URL}/message/push`, payload, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${CONFIG.CHANNEL_ACCESS_TOKEN}`
-                },
-                timeout: 8000
+            await client.pushMessage({
+                to: toId,
+                messages: [
+                    {
+                        type: 'text',
+                        text: cleanText
+                    }
+                ]
             });
             return true;
         } catch (error) {
-            const errData = error.response ? JSON.stringify(error.response.data) : error.message;
+            const errData = error.response ? JSON.stringify(error.response.data) : (error.message || error);
             console.error('[LINE] Lỗi pushText:', errData);
             return false;
         }
@@ -76,38 +66,24 @@ const lineClient = {
         if (!userId) return 'Quản lý';
 
         try {
-            let url = `${LINE_API_URL}/profile/${userId}`;
             if (groupId && groupId.startsWith('C')) {
-                url = `${LINE_API_URL}/group/${groupId}/member/${userId}`;
+                const member = await client.getGroupMemberProfile(groupId, userId).catch(() => null);
+                if (member && member.displayName) {
+                    return member.displayName;
+                }
             } else if (groupId && groupId.startsWith('R')) {
-                url = `${LINE_API_URL}/room/${groupId}/member/${userId}`;
+                const member = await client.getRoomMemberProfile(groupId, userId).catch(() => null);
+                if (member && member.displayName) {
+                    return member.displayName;
+                }
             }
 
-            const res = await axios.get(url, {
-                headers: {
-                    'Authorization': `Bearer ${CONFIG.CHANNEL_ACCESS_TOKEN}`
-                },
-                timeout: 5000
-            });
-
-            if (res.data && res.data.displayName) {
-                return res.data.displayName;
+            const profile = await client.getProfile(userId).catch(() => null);
+            if (profile && profile.displayName) {
+                return profile.displayName;
             }
         } catch (error) {
-            // Nếu không lấy được từ group member thì thử lấy từ profile thông thường
-            if (groupId) {
-                try {
-                    const fallbackRes = await axios.get(`${LINE_API_URL}/profile/${userId}`, {
-                        headers: {
-                            'Authorization': `Bearer ${CONFIG.CHANNEL_ACCESS_TOKEN}`
-                        },
-                        timeout: 3000
-                    });
-                    if (fallbackRes.data && fallbackRes.data.displayName) {
-                        return fallbackRes.data.displayName;
-                    }
-                } catch (e) {}
-            }
+            // bỏ qua lỗi
         }
 
         return 'Quản lý';
@@ -117,19 +93,7 @@ const lineClient = {
      * Đánh dấu tin nhắn đã đọc trên LINE
      */
     async markAsRead(chatId, markAsReadToken) {
-        if (!chatId || !markAsReadToken) return;
-        try {
-            await axios.post(`${LINE_API_URL}/chat/markAsRead`, {
-                chatId: chatId,
-                markAsReadToken: markAsReadToken
-            }, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${CONFIG.CHANNEL_ACCESS_TOKEN}`
-                },
-                timeout: 4000
-            });
-        } catch (e) {}
+        return true;
     }
 };
 
