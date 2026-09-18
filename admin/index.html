@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Quản Lý Kho Coupon & Cú Pháp PMH</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- SheetJS (Excel) Offline -->
+    <script src="xlsx.full.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- ==================== MÀN HÌNH ĐĂNG NHẬP ==================== -->
+    <div id="login-view" class="auth-wrapper">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="brand-badge">
+                    <i class="fa-solid fa-bolt"></i>
+                    <span>Tốc Độ Siêu Tốc</span>
+                </div>
+                <div class="auth-logo">
+                    <div class="logo-icon">
+                        <i class="fa-solid fa-ticket"></i>
+                    </div>
+                    <div>
+                        <h2>Hệ Thống Quản Lý PMH</h2>
+                        <p>Kho Coupon & Cú Pháp Tích Hợp Firebase</p>
+                    </div>
+                </div>
+            </div>
+
+            <form id="login-form" class="auth-form" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="username"><i class="fa-solid fa-user-shield"></i> Mã Quản Trị (User ID)</label>
+                    <input type="text" id="username" placeholder="Nhập User (VD: 3717 hoặc 12233)" autocomplete="username" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="password"><i class="fa-solid fa-key"></i> Mật Khẩu</label>
+                    <div class="input-password-wrapper">
+                        <input type="password" id="password" placeholder="Nhập mật khẩu" autocomplete="current-password" required>
+                        <button type="button" class="btn-toggle-pw" onclick="togglePasswordVisibility()">
+                            <i class="fa-regular fa-eye" id="pw-eye-icon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="login-error" class="alert-box error hidden">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span id="login-error-text">Tài khoản hoặc mật khẩu không chính xác!</span>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block btn-login" id="btn-login-submit">
+                    <span>Đăng Nhập Quản Trị</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+
+                <div class="auth-footer-hint">
+                    <p>💡 Tài khoản quản trị cấp phép: <code>3717</code> hoặc <code>12233</code></p>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== GIAO DIỆN CHÍNH (SAU KHI ĐĂNG NHẬP) ==================== -->
+    <div id="app-view" class="app-layout hidden">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="app-brand">
+                    <div class="brand-icon">
+                        <i class="fa-solid fa-ticket"></i>
+                    </div>
+                    <div class="brand-text">
+                        <span class="brand-title">PMH Cloud</span>
+                        <span class="brand-subtitle">Firebase Edition</span>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="sidebar-menu">
+                <button class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Tổng Quan</span>
+                </button>
+                <button class="nav-item" data-tab="coupons" onclick="switchTab('coupons')">
+                    <i class="fa-solid fa-tags"></i>
+                    <span>Kho Mã Coupon</span>
+                    <span class="badge badge-stock" id="badge-total-unused">0</span>
+                </button>
+                <button class="nav-item" data-tab="syntax" onclick="switchTab('syntax')">
+                    <i class="fa-solid fa-file-code"></i>
+                    <span>Quản Lý Cú Pháp</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-card">
+                    <div class="user-avatar">
+                        <i class="fa-solid fa-user-gear"></i>
+                    </div>
+                    <div class="user-details">
+                        <div class="user-name" id="display-user-id">Admin 3717</div>
+                        <div class="user-role">Quản Trị Viên</div>
+                    </div>
+                    <button class="btn-logout" title="Đăng xuất" onclick="handleLogout()">
+                        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            
+            <!-- Top App Bar -->
+            <header class="top-bar">
+                <div class="top-bar-left">
+                    <h1 class="page-title" id="page-title">Tổng Quan Kho Mã</h1>
+                    <p class="page-desc" id="page-desc">Theo dõi tồn kho coupon và trạng thái dữ liệu theo thời gian thực</p>
+                </div>
+                <div class="top-bar-right">
+                    <div class="sync-status" id="sync-status-indicator">
+                        <span class="status-dot online"></span>
+                        <span id="sync-status-text">Đã đồng bộ</span>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="syncDataFromFirebase(true)">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>Làm Mới</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- ==================== TAB 1: DASHBOARD ==================== -->
+            <section id="tab-dashboard" class="tab-pane active">
+                
+                <!-- Stat Metric Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card stat-total">
+                        <div class="stat-icon">
+                            <i class="fa-solid fa-cubes"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Tổng Số Mã Trong Kho</span>
+                            <h3 class="stat-value" id="stat-total-coupons">0</h3>
+                            <span class="stat-sub">Bao gồm chưa dùng & đã phát</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card stat-unused">
+                        <div class="stat-icon">
+                            <i class="fa-solid fa-ticket-simple"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Mã Khả Dụng (Chưa Dùng)</span>
+                            <h3 class="stat-value text-success" id="stat-unused-coupons">0</h3>
+                            <span class="stat-sub" id="stat-unused-pct">Sẵn sàng phát tự động</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card stat-sent">
+                        <div class="stat-icon">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Mã Đã Phát Cho Quản Lý</span>
+                            <h3 class="stat-value text-info" id="stat-sent-coupons">0</h3>
+                            <span class="stat-sub">Đã cấp kèm MĐH & Kho</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card stat-types">
+                        <div class="stat-icon">
+                            <i class="fa-solid fa-layer-group"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Loại PMH Hoạt Động</span>
+                            <h3 class="stat-value text-primary" id="stat-types-count">0</h3>
+                            <span class="stat-sub">ML200, ICT50, MOTO...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tồn kho theo từng loại PMH -->
+                <div class="content-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Danh Sách Tồn Kho Theo Từng Loại PMH</h2>
+                            <p>Theo dõi chi tiết số lượng tồn, đã phát và tỷ lệ khả dụng của từng loại mã</p>
+                        </div>
+                        <div class="header-filters" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <div class="search-input-wrapper" style="position: relative; width: 220px;">
+                                <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.85rem;"></i>
+                                <input type="text" id="stock-type-search" placeholder="Tìm loại PMH..." class="form-control" style="padding-left: 34px; height: 38px; font-size: 0.85rem;" oninput="renderDashboardStockList()">
+                            </div>
+                            <select id="stock-type-filter" class="form-control" style="width: 170px; height: 38px; font-size: 0.85rem;" onchange="renderDashboardStockList()">
+                                <option value="ALL">Tất cả trạng thái</option>
+                                <option value="LOW">⚠️ Sắp hết (&lt; 5)</option>
+                                <option value="OUT">❌ Hết mã (0)</option>
+                                <option value="OK">✅ Khả dụng (&ge; 5)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive stock-list-table-wrapper" style="max-height: 480px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <table class="data-table stock-list-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 60px;">STT</th>
+                                    <th>Loại PMH</th>
+                                    <th style="text-align: center;">Còn Khả Dụng</th>
+                                    <th style="text-align: center;">Đã Phát</th>
+                                    <th style="text-align: center;">Tổng Kho</th>
+                                    <th style="min-width: 160px;">Tỷ Lệ Khả Dụng</th>
+                                    <th style="text-align: center;">Trạng Thái</th>
+                                    <th style="text-align: right; width: 110px;">Thao Tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stock-by-type-tbody">
+                                <!-- Rendered by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="stock-type-empty-state" class="empty-state hidden" style="padding: 30px;">
+                        <i class="fa-solid fa-box-open" style="font-size: 2rem; color: var(--text-muted); margin-bottom: 8px;"></i>
+                        <p class="text-muted">Không tìm thấy loại PMH nào phù hợp với bộ lọc.</p>
+                    </div>
+                </div>
+
+                <!-- Bảng các mã phát gần đây -->
+                <div class="content-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Lịch Sử Cấp Mã Gần Đây</h2>
+                            <p>Các mã vừa được Bot hoặc Admin phát cho Quản lý</p>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" onclick="switchTab('coupons')">
+                            <span>Xem Tất Cả</span>
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Mã Coupon</th>
+                                    <th>Loại PMH</th>
+                                    <th>Trạng Thái</th>
+                                    <th>Mã Kho</th>
+                                    <th>MĐH</th>
+                                    <th>Người Nhận</th>
+                                    <th>Thời Gian</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-dispatched-tbody">
+                                <!-- Rendered by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== TAB 2: QUẢN LÝ KHO COUPON ==================== -->
+            <section id="tab-coupons" class="tab-pane">
+                
+                <!-- Action Controls Bar -->
+                <div class="toolbar-card">
+                    <div class="toolbar-left">
+                        <div class="search-input-wrapper">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="coupon-search-input" placeholder="Tìm theo Mã, Loại PMH, MĐH, Tên..." oninput="handleCouponFilter()">
+                        </div>
+
+                        <div class="filter-select-wrapper">
+                            <select id="filter-type-select" onchange="handleCouponFilter()">
+                                <option value="ALL">Tất cả Loại PMH</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-select-wrapper">
+                            <select id="filter-status-select" onchange="handleCouponFilter()">
+                                <option value="ALL">Tất cả Trạng Thái</option>
+                                <option value="UNUSED" selected>🟢 Chưa sử dụng</option>
+                                <option value="SENT">🔵 Đã phát mã</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="toolbar-right">
+                        <button class="btn btn-excel" onclick="exportCouponsToExcel()" title="Xuất toàn bộ danh sách mã ra file Excel (.xlsx)">
+                            <i class="fa-solid fa-file-excel"></i>
+                            <span>Xuất Excel</span>
+                        </button>
+                        <button class="btn btn-secondary" onclick="downloadCouponTemplate()" title="Tải file mẫu Excel chuẩn để điền mã">
+                            <i class="fa-solid fa-file-arrow-down"></i>
+                            <span>Xuất File Mẫu</span>
+                        </button>
+                        <button class="btn btn-primary" onclick="openBulkImportModal()" title="Nhập danh sách mã từ file Excel hoặc copy dán">
+                            <i class="fa-solid fa-file-import"></i>
+                            <span>Nhập File</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Summary sub-bar -->
+                <div class="table-meta-bar">
+                    <div class="meta-count">
+                        Hiển thị <strong id="filter-count-display">0</strong> / <span id="total-count-display">0</span> mã
+                    </div>
+                    <div class="table-batch-actions">
+                        <button class="btn btn-danger btn-sm" id="btn-clear-sent" onclick="clearSentCouponsPrompt()">
+                            <i class="fa-solid fa-trash-can"></i>
+                            <span>Xóa Các Mã Đã Phát</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Table Container -->
+                <div class="content-section table-section">
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th width="40">STT</th>
+                                    <th>Mã Coupon</th>
+                                    <th>Loại PMH</th>
+                                    <th>Trạng Thái</th>
+                                    <th>Mã Kho</th>
+                                    <th>MĐH</th>
+                                    <th>Người Nhận</th>
+                                    <th>Cập Nhật</th>
+                                    <th width="120" class="text-right">Hành Động</th>
+                                </tr>
+                            </thead>
+                            <tbody id="coupons-tbody">
+                                <!-- Rendered by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Empty state placeholder -->
+                    <div id="coupons-empty-state" class="empty-state hidden">
+                        <div class="empty-icon"><i class="fa-solid fa-ticket-simple"></i></div>
+                        <h3>Không tìm thấy mã coupon nào</h3>
+                        <p>Thử tìm kiếm từ khóa khác hoặc bấm nút "Nhập Từ Sheet (Paste)" để nạp mã mới.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== TAB 3: QUẢN LÝ CÚ PHÁP ==================== -->
+            <section id="tab-syntax" class="tab-pane">
+                
+                <div class="syntax-layout-grid">
+                    <!-- Left Column: Editor -->
+                    <div class="content-section syntax-editor-card">
+                        <div class="section-header">
+                            <div>
+                                <h2>Soạn Thảo Cú Pháp Form & Loại PMH</h2>
+                                <p>Nội dung này được BOT gửi khi quản lý gõ <code>cp</code> hoặc báo lỗi form</p>
+                            </div>
+                            <div class="section-actions">
+                                <button class="btn btn-secondary btn-sm" onclick="resetSyntaxToDefaultPrompt()">
+                                    <i class="fa-solid fa-arrow-rotate-left"></i>
+                                    <span>Mẫu Gốc</span>
+                                </button>
+                                <button class="btn btn-primary btn-sm" onclick="saveSyntaxToFirebase()">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                                    <span>Lưu Lên Firebase</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="editor-container">
+                            <textarea id="syntax-textarea" class="code-editor" placeholder="Nhập nội dung cú pháp tại đây..." rows="22" oninput="updateLinePreview()"></textarea>
+                        </div>
+
+                        <div class="editor-footer">
+                            <div class="char-count">
+                                Số ký tự: <strong id="syntax-char-count">0</strong> / 4000 (Giới hạn 1 tin LINE)
+                            </div>
+                            <div class="editor-buttons">
+                                <button class="btn btn-secondary btn-sm" onclick="copySyntaxText()">
+                                    <i class="fa-regular fa-copy"></i>
+                                    <span>Sao Chép</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Live LINE Chat Simulator -->
+                    <div class="content-section syntax-preview-card">
+                        <div class="section-header">
+                            <div>
+                                <h2>Xem Trước Tin Nhắn LINE</h2>
+                                <p>Hiển thị mô phỏng trực quan như trên màn hình điện thoại</p>
+                            </div>
+                        </div>
+
+                        <div class="phone-simulator">
+                            <div class="phone-notch"></div>
+                            <div class="phone-header">
+                                <i class="fa-solid fa-chevron-left"></i>
+                                <div class="bot-avatar-small">
+                                    <i class="fa-solid fa-robot"></i>
+                                </div>
+                                <div class="bot-info-small">
+                                    <span class="bot-name">BOT PHÁT MÃ PMH</span>
+                                    <span class="bot-status">Trực tuyến</span>
+                                </div>
+                                <i class="fa-solid fa-bars"></i>
+                            </div>
+
+                            <div class="phone-chat-body">
+                                <div class="chat-message user-msg">
+                                    <div class="chat-bubble">cp</div>
+                                </div>
+
+                                <div class="chat-message bot-msg">
+                                    <div class="bot-avatar-chat">
+                                        <i class="fa-solid fa-robot"></i>
+                                    </div>
+                                    <div class="chat-bubble-container">
+                                        <div class="chat-bubble bot-bubble" id="phone-preview-bubble">
+                                            <!-- Live preview text -->
+                                        </div>
+                                        <span class="chat-time" id="phone-preview-time">Vừa xong</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ==================== MODAL 1: NHẬP MÃ HÀNG LOẠT (BULK IMPORT) ==================== -->
+    <div id="modal-bulk-import" class="modal-overlay hidden">
+        <div class="modal-box modal-lg">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <div class="modal-icon-badge"><i class="fa-solid fa-file-import"></i></div>
+                    <div>
+                        <h3>Nhập Mã Coupon Hàng Loạt</h3>
+                        <p>Kéo thả file Excel / CSV hoặc dán trực tiếp danh sách mã từ bảng tính</p>
+                    </div>
+                </div>
+                <button class="btn-close-modal" onclick="closeBulkImportModal()">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Chuyển đổi phương thức nhập -->
+                <div class="import-mode-tabs">
+                    <button type="button" class="import-tab-btn active" id="tab-btn-file" onclick="switchImportTab('file')">
+                        <i class="fa-solid fa-file-excel"></i>
+                        <span>Nhập Từ File Excel / CSV</span>
+                    </button>
+                    <button type="button" class="import-tab-btn" id="tab-btn-paste" onclick="switchImportTab('paste')">
+                        <i class="fa-regular fa-paste"></i>
+                        <span>Dán Trực Tiếp (Paste)</span>
+                    </button>
+                </div>
+
+                <!-- Panel 1: Tải file Excel/CSV -->
+                <div id="import-panel-file" class="import-panel">
+                    <div class="file-dropzone" id="file-dropzone" onclick="triggerFileInput()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleFileDrop(event)">
+                        <input type="file" id="bulk-file-input" accept=".xlsx,.xls,.csv" class="hidden-file-input" onchange="handleFileSelect(event)">
+                        <div id="dropzone-prompt" class="dropzone-prompt">
+                            <div class="dropzone-icon">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                            </div>
+                            <h4>Kéo & thả file Excel (.xlsx, .xls) hoặc .csv vào đây</h4>
+                            <p>hoặc <span class="browse-link">bấm vào đây để duyệt file từ máy tính</span></p>
+                            <span class="dropzone-tip"><i class="fa-solid fa-circle-check"></i> Hỗ trợ nhận diện tự động cột <strong>Mã Coupon</strong> & <strong>Loại PMH</strong></span>
+                        </div>
+                        <div id="dropzone-file-info" class="dropzone-file-info hidden">
+                            <div class="file-icon-box">
+                                <i class="fa-solid fa-file-excel"></i>
+                            </div>
+                            <div class="file-text-info">
+                                <span id="display-file-name" class="file-name">filename.xlsx</span>
+                                <span id="display-file-size" class="file-size">0 KB</span>
+                            </div>
+                            <button type="button" class="btn-clear-file" onclick="removeSelectedFile(event)" title="Hủy chọn file">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="template-download-callout">
+                        <div>
+                            <i class="fa-regular fa-file-excel"></i>
+                            <span>Chưa có file mẫu chuẩn? Tải file mẫu để điền nhanh:</span>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="downloadCouponTemplate()">
+                            <i class="fa-solid fa-file-arrow-down"></i>
+                            <span>Tải File Mẫu (.xlsx)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel 2: Dán trực tiếp từ Sheet / Clipboard -->
+                <div id="import-panel-paste" class="import-panel hidden">
+                    <div class="import-instructions">
+                        <span>💡 Copy 2 cột từ Google Sheet / Excel (Cột 1: Mã Coupon, Cột 2: Loại PMH) rồi dán vào đây:</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="bulk-textarea">Dán Dữ Liệu:</label>
+                        <textarea id="bulk-textarea" class="code-editor bulk-editor" placeholder="9UD9GJWNSD	ML200
+I8XDVRT4AK	ML200
+IIUJ242I7E	ML200
+220WRZLY0H	ML200
+NDYXIKJL0L	ML200..." rows="8" oninput="previewBulkImport()"></textarea>
+                    </div>
+                </div>
+
+                <!-- Preview Area chung -->
+                <div id="bulk-preview-wrapper" class="bulk-preview-wrapper hidden">
+                    <div class="preview-header">
+                        <strong><i class="fa-solid fa-list-check"></i> Nhận diện thành công: <span id="preview-valid-count" class="text-success">0</span> mã hợp lệ</strong>
+                        <span id="preview-duplicate-warning" class="text-warning"></span>
+                    </div>
+                    <div class="preview-table-container">
+                        <table class="data-table preview-table">
+                            <thead>
+                                <tr>
+                                    <th width="50">STT</th>
+                                    <th>Mã Coupon</th>
+                                    <th>Loại PMH</th>
+                                    <th>Trạng Thái</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bulk-preview-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeBulkImportModal()">Hủy</button>
+                <button class="btn btn-primary" id="btn-confirm-import" onclick="confirmBulkImport()" disabled>
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>Lưu Vào Kho Dữ Liệu</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Application Logic Scripts -->
+    <script src="app.js"></script>
+</body>
+</html>

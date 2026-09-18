@@ -1,0 +1,26 @@
+{
+  "name": "pmh-line-bot",
+  "version": "1.0.0",
+  "description": "LINE Bot phát mã PMH và hệ thống quản lý kho Coupon siêu tốc kết nối Firebase",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "line-bot",
+    "pmh",
+    "coupon",
+    "firebase",
+    "express"
+  ],
+  "author": "PMH ICT",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "node-cron": "^3.0.3"
+  }
+}
