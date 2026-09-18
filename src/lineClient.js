@@ -10,9 +10,10 @@ const lineClient = {
     async replyText(replyToken, text, quoteToken = null, mentionUserId = null) {
         if (!replyToken || !text) return;
 
+        const cleanText = String(text).trim();
         const messageObj = {
             type: 'text',
-            text: String(text).trim()
+            text: cleanText
         };
 
         if (quoteToken) {
@@ -20,10 +21,8 @@ const lineClient = {
         }
 
         if (mentionUserId) {
-            // Nếu muốn mention user
             const mentionText = '@User ';
-            messageObj.text = mentionText + messageObj.text;
-            messageObj.emojis = undefined;
+            messageObj.text = mentionText + cleanText;
             messageObj.mention = {
                 mentionees: [
                     {
@@ -51,8 +50,27 @@ const lineClient = {
             return true;
         } catch (error) {
             const errData = error.response ? JSON.stringify(error.response.data) : error.message;
-            console.error('[LINE] Lỗi replyText:', errData);
-            return false;
+            console.warn('[LINE] Thử gửi lại dạng văn bản thuần không kèm quote/mention do lỗi:', errData);
+
+            // Fallback gửi văn bản thuần túy 100% không quote, không mention
+            try {
+                await axios.post(`${LINE_API_URL}/message/reply`, {
+                    replyToken: replyToken,
+                    messages: [{ type: 'text', text: cleanText }]
+                }, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${CONFIG.CHANNEL_ACCESS_TOKEN}`
+                    },
+                    timeout: 8000
+                });
+                console.log('[LINE] Gửi tin nhắn fallback thành công!');
+                return true;
+            } catch (fallbackError) {
+                const fbErr = fallbackError.response ? JSON.stringify(fallbackError.response.data) : fallbackError.message;
+                console.error('[LINE] Lỗi khi gửi fallback tin nhắn:', fbErr);
+                return false;
+            }
         }
     },
 

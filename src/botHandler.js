@@ -39,7 +39,23 @@ function isAdminApprovalCommand(text) {
  * Xử lý sự kiện Webhook từ LINE
  */
 async function handleLineEvent(event) {
-    if (!event || event.type !== 'message' || !event.message || event.message.type !== 'text') {
+    if (!event) return;
+
+    // Khi bot được mời vào nhóm (Join event)
+    if (event.type === 'join') {
+        const welcome = [
+            '👋 Xin chào mọi người! Em là BOT PMH ICT.',
+            '------------------------',
+            '💡 Các lệnh thao tác nhanh:',
+            '• "cp": Lấy cú pháp đăng ký mã PMH',
+            '• "tk": Kiểm tra số lượng tồn kho PMH',
+            '• "admin": Khai báo quản trị viên duyệt mã'
+        ].join(NL);
+        await lineClient.replyText(event.replyToken, welcome);
+        return;
+    }
+
+    if (event.type !== 'message' || !event.message || event.message.type !== 'text') {
         return;
     }
 
@@ -51,7 +67,9 @@ async function handleLineEvent(event) {
     const isPrivateChat = event.source && event.source.type === 'user';
     const sourceId = event.source ? (event.source.groupId || event.source.roomId || event.source.userId) : '';
 
-    if (!text || !userId) return;
+    if (!text) return;
+
+    console.log(`[BOT RECV] text: "${text}" | userId: "${userId || 'ẨN'}" | source: ${event.source ? event.source.type : 'N/A'} (ID: ${sourceId})`);
 
     // Đánh dấu đã xem (mark as read)
     if (event.message.markAsReadToken && sourceId) {
@@ -67,7 +85,7 @@ async function handleLineEvent(event) {
         processedMessages.set(messageId, Date.now());
     }
 
-    const lowerText = text.toLowerCase();
+    const lowerText = text.toLowerCase().trim();
 
     // 1. Lệnh DUYỆT của Admin
     if (isAdminApprovalCommand(text)) {
@@ -115,26 +133,31 @@ async function handleLineEvent(event) {
         return;
     }
 
-    // 2. Lệnh Cú Pháp (cp)
-    if (lowerText === 'cp') {
+    // 2. Lệnh Cú Pháp (cp / cú pháp)
+    const isCp = lowerText === 'cp' || lowerText.startsWith('cp ') || lowerText === 'cú pháp' || lowerText === 'cu phap' || lowerText === '.cp' || lowerText === '/cp';
+    if (isCp) {
+        console.log('[BOT] Đang lấy cú pháp gửi về cho nhóm/user...');
         const syntax = await Firebase.getSyntax();
         if (!syntax) {
-            await lineClient.replyText(replyToken, '❌ Chưa có cú pháp nào trên hệ thống Web Quản Trị.', quoteToken, isPrivateChat ? null : userId);
+            await lineClient.replyText(replyToken, '❌ Chưa có cú pháp nào trên hệ thống Web Quản Trị.', quoteToken);
         } else {
-            await lineClient.replyText(replyToken, syntax, quoteToken, isPrivateChat ? null : userId);
+            await lineClient.replyText(replyToken, syntax, quoteToken);
         }
         return;
     }
 
-    // 3. Lệnh Thống Kê (tk)
-    if (lowerText === 'tk') {
+    // 3. Lệnh Thống Kê (tk / thống kê)
+    const isTk = lowerText === 'tk' || lowerText.startsWith('tk ') || lowerText === 'thống kê' || lowerText === 'thong ke' || lowerText === '.tk' || lowerText === '/tk';
+    if (isTk) {
+        console.log('[BOT] Đang lấy thống kê tồn kho gửi về cho nhóm/user...');
         const statsMessage = await couponService.getStatisticsMessage();
-        await lineClient.replyText(replyToken, statsMessage, quoteToken, isPrivateChat ? null : userId);
+        await lineClient.replyText(replyToken, statsMessage, quoteToken);
         return;
     }
 
     // 4. Lệnh Hướng Dẫn (hd)
-    if (lowerText === 'hd') {
+    const isHd = lowerText === 'hd' || lowerText === 'hướng dẫn' || lowerText === 'huong dan' || lowerText === '.hd' || lowerText === '/hd';
+    if (isHd) {
         const hasAdminPermission = await isAdmin(userId);
         if (hasAdminPermission && isPrivateChat) {
             const guide = [
@@ -149,7 +172,7 @@ async function handleLineEvent(event) {
             await lineClient.replyText(replyToken, guide, quoteToken);
         } else {
             const syntax = await Firebase.getSyntax();
-            await lineClient.replyText(replyToken, syntax || '💡 Gõ "cp" để lấy mẫu xin PMH.', quoteToken, isPrivateChat ? null : userId);
+            await lineClient.replyText(replyToken, syntax || '💡 Gõ "cp" để lấy mẫu xin PMH.', quoteToken);
         }
         return;
     }
