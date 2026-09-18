@@ -7,36 +7,18 @@ const lineClient = {
     /**
      * Trả lời tin nhắn người dùng (có hỗ trợ quoteToken và mention)
      */
-    async replyText(replyToken, text, quoteToken = null, mentionUserId = null) {
-        if (!replyToken || !text) return;
+    async replyText(replyToken, text) {
+        if (!replyToken || !text) return false;
 
         const cleanText = String(text).trim();
-        const messageObj = {
-            type: 'text',
-            text: cleanText
-        };
-
-        if (quoteToken) {
-            messageObj.quoteToken = quoteToken;
-        }
-
-        if (mentionUserId) {
-            const mentionText = '@User ';
-            messageObj.text = mentionText + cleanText;
-            messageObj.mention = {
-                mentionees: [
-                    {
-                        index: 0,
-                        length: mentionText.length - 1,
-                        userId: mentionUserId
-                    }
-                ]
-            };
-        }
-
         const payload = {
             replyToken: replyToken,
-            messages: [messageObj]
+            messages: [
+                {
+                    type: 'text',
+                    text: cleanText
+                }
+            ]
         };
 
         try {
@@ -50,27 +32,8 @@ const lineClient = {
             return true;
         } catch (error) {
             const errData = error.response ? JSON.stringify(error.response.data) : error.message;
-            console.warn('[LINE] Thử gửi lại dạng văn bản thuần không kèm quote/mention do lỗi:', errData);
-
-            // Fallback gửi văn bản thuần túy 100% không quote, không mention
-            try {
-                await axios.post(`${LINE_API_URL}/message/reply`, {
-                    replyToken: replyToken,
-                    messages: [{ type: 'text', text: cleanText }]
-                }, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${CONFIG.CHANNEL_ACCESS_TOKEN}`
-                    },
-                    timeout: 8000
-                });
-                console.log('[LINE] Gửi tin nhắn fallback thành công!');
-                return true;
-            } catch (fallbackError) {
-                const fbErr = fallbackError.response ? JSON.stringify(fallbackError.response.data) : fallbackError.message;
-                console.error('[LINE] Lỗi khi gửi fallback tin nhắn:', fbErr);
-                return false;
-            }
+            console.error('[LINE] Lỗi replyText:', errData);
+            return false;
         }
     },
 
