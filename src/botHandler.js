@@ -139,9 +139,9 @@ async function handleLineEvent(event) {
         console.log('[BOT] Đang lấy cú pháp gửi về cho nhóm/user...');
         const syntax = await Firebase.getSyntax();
         if (!syntax) {
-            await lineClient.replyText(replyToken, '❌ Chưa có cú pháp nào trên hệ thống Web Quản Trị.', quoteToken);
+            await lineClient.replyText(replyToken, '❌ Chưa có cú pháp nào trên hệ thống Web Quản Trị.');
         } else {
-            await lineClient.replyText(replyToken, syntax, quoteToken);
+            await lineClient.replyText(replyToken, syntax);
         }
         return;
     }
@@ -151,7 +151,7 @@ async function handleLineEvent(event) {
     if (isTk) {
         console.log('[BOT] Đang lấy thống kê tồn kho gửi về cho nhóm/user...');
         const statsMessage = await couponService.getStatisticsMessage();
-        await lineClient.replyText(replyToken, statsMessage, quoteToken);
+        await lineClient.replyText(replyToken, statsMessage);
         return;
     }
 
