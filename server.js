@@ -22,6 +22,7 @@ app.get('/api/health', async (req, res) => {
     const syntax = await Firebase.getSyntax();
     res.json({
         status: 'OK',
+        version: '1.0.2',
         service: 'PMH LINE BOT & Web Admin',
         firebaseConnected: !!syntax,
         timestamp: new Date().toISOString()
