@@ -85,6 +85,8 @@ let appState = {
     currentUser: null,
     coupons: [],
     syntax: '',
+    admins: [],
+    settings: { autoApprove: false },
     firebaseConfig: { ...DEFAULT_FIREBASE_CONFIG },
     filter: {
         search: '',
@@ -274,6 +276,10 @@ function switchTab(tabId) {
         titleEl.innerText = 'Quản Lý Cú Pháp Form';
         descEl.innerText = 'Soạn thảo và cập nhật nội dung tin nhắn hướng dẫn/cú pháp form gửi trên LINE';
         updateLinePreview();
+    } else if (tabId === 'admins') {
+        titleEl.innerText = 'Khai Báo & Quản Lý Admin';
+        descEl.innerText = 'Khai báo danh sách các tài khoản LINE có quyền phê duyệt phát mã PMH & cấu hình tự động';
+        renderAdminsTable();
     }
 }
 
@@ -1162,15 +1168,19 @@ function syncDataFromFirebase(isUserClick = false) {
 
     showSyncing(true);
 
-    // Lấy coupons từ Firebase
+    // Lấy dữ liệu từ Firebase
     const couponsUrl = getFirebaseEndpoint('/coupons.json');
     const syntaxUrl = getFirebaseEndpoint('/syntax.json');
+    const adminsUrl = getFirebaseEndpoint('/admins.json');
+    const settingsUrl = getFirebaseEndpoint('/settings.json');
 
     Promise.all([
         fetch(couponsUrl).then(r => r.ok ? r.json() : null),
-        fetch(syntaxUrl).then(r => r.ok ? r.json() : null)
+        fetch(syntaxUrl).then(r => r.ok ? r.json() : null),
+        fetch(adminsUrl).then(r => r.ok ? r.json() : null),
+        fetch(settingsUrl).then(r => r.ok ? r.json() : null)
     ])
-    .then(([fbCoupons, fbSyntax]) => {
+    .then(([fbCoupons, fbSyntax, fbAdmins, fbSettings]) => {
         showSyncing(false);
 
         if (fbCoupons && Array.isArray(fbCoupons)) {
@@ -1189,6 +1199,36 @@ function syncDataFromFirebase(isUserClick = false) {
                 syntaxTextarea.value = appState.syntax;
                 updateLinePreview();
             }
+        }
+
+        // Xử lý danh sách Admin
+        if (fbAdmins && typeof fbAdmins === 'object') {
+            appState.admins = Object.entries(fbAdmins).map(([id, a]) => ({ id, ...a }));
+        } else {
+            // Khởi tạo admin mặc định của Sơn nếu chưa có
+            appState.admins = [
+                {
+                    id: 'admin_son_default',
+                    name: 'Admin Sơn (Chủ tài khoản)',
+                    userId: 'U272dcb226f96e4e17e561b19ba8ab679',
+                    role: 'ADMIN',
+                    active: true,
+                    note: 'Khai báo mặc định từ hệ thống'
+                }
+            ];
+            // Lưu lên Firebase
+            fetch(getFirebaseEndpoint('/admins/admin_son_default.json'), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(appState.admins[0])
+            }).catch(() => {});
+        }
+        renderAdminsTable();
+
+        // Xử lý cấu hình phê duyệt
+        if (fbSettings && typeof fbSettings === 'object') {
+            appState.settings = fbSettings;
+            updateApprovalModeUi(!!fbSettings.autoApprove);
         }
 
         if (isUserClick) {
@@ -1421,4 +1461,238 @@ function formatDate(dateStr) {
 
 function pad(num) {
     return num < 10 ? '0' + num : num;
+}
+
+// ==================== 14. QUẢN LÝ & KHAI BÁO ADMIN ====================
+function renderAdminsTable() {
+    const tbody = document.getElementById('admins-tbody');
+    const badgeCount = document.getElementById('badge-total-admins');
+    if (!tbody) return;
+
+    const admins = appState.admins || [];
+    if (badgeCount) badgeCount.innerText = admins.length;
+
+    tbody.innerHTML = '';
+
+    if (admins.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-muted" style="text-align: center; padding: 24px;">
+                    Chưa có tài khoản Admin nào được khai báo. Hãy bấm nút "Thêm Admin LINE" hoặc nhắn tin "admin" riêng cho Bot LINE.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    admins.forEach((adm, index) => {
+        const tr = document.createElement('tr');
+        const isActive = adm.active !== false;
+
+        tr.innerHTML = `
+            <td class="text-muted">${index + 1}</td>
+            <td>
+                <strong style="color: #0F172A; font-size: 0.92rem;">${adm.name || 'Admin'}</strong>
+            </td>
+            <td>
+                <span class="coupon-code-pill" style="font-family: monospace; font-weight: 600; color: #4F46E5;">${adm.userId || adm.lineId || '-'}</span>
+            </td>
+            <td>
+                <span style="font-size: 0.84rem; font-weight: 600; color: ${adm.role === 'ADMIN' ? '#4F46E5' : '#0284C7'};">
+                    <i class="fa-solid ${adm.role === 'ADMIN' ? 'fa-shield-halved' : 'fa-user-check'}"></i>
+                    ${adm.role === 'ADMIN' ? 'Quản Trị Viên' : 'Người Phê Duyệt'}
+                </span>
+            </td>
+            <td>
+                <span class="status-badge" style="color: ${isActive ? '#16A34A' : '#DC2626'};">
+                    <i class="fa-solid ${isActive ? 'fa-circle-check' : 'fa-circle-xmark'}"></i>
+                    ${isActive ? 'Đang hoạt động' : 'Tạm khóa'}
+                </span>
+            </td>
+            <td class="text-muted" style="font-size: 0.82rem;">
+                ${adm.note || '-'}
+            </td>
+            <td class="text-right">
+                <div class="table-actions">
+                    <button class="btn-icon" title="${isActive ? 'Tạm khóa quyền duyệt' : 'Mở khóa quyền duyệt'}" onclick="toggleAdminStatus('${adm.id}')">
+                        <i class="fa-solid ${isActive ? 'fa-user-slash' : 'fa-user-check'}"></i>
+                    </button>
+                    <button class="btn-icon danger" title="Xóa Admin này" onclick="deleteAdminPrompt('${adm.id}')">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function openAddAdminModal(editId = null) {
+    const modal = document.getElementById('modal-admin');
+    const titleEl = document.getElementById('modal-admin-title');
+    const idInput = document.getElementById('admin-edit-id');
+    const nameInput = document.getElementById('admin-name');
+    const userIdInput = document.getElementById('admin-user-id');
+    const roleInput = document.getElementById('admin-role');
+    const noteInput = document.getElementById('admin-note');
+
+    if (editId) {
+        const target = appState.admins.find(a => a.id === editId);
+        if (target) {
+            titleEl.innerText = 'Chỉnh Sửa Admin LINE';
+            idInput.value = target.id;
+            nameInput.value = target.name || '';
+            userIdInput.value = target.userId || '';
+            roleInput.value = target.role || 'ADMIN';
+            noteInput.value = target.note || '';
+        }
+    } else {
+        titleEl.innerText = 'Thêm Admin LINE';
+        idInput.value = '';
+        nameInput.value = '';
+        userIdInput.value = '';
+        roleInput.value = 'ADMIN';
+        noteInput.value = '';
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function closeAdminModal() {
+    const modal = document.getElementById('modal-admin');
+    if (modal) modal.classList.add('hidden');
+}
+
+function handleSaveAdmin(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('admin-edit-id').value;
+    const name = document.getElementById('admin-name').value.trim();
+    const userId = document.getElementById('admin-user-id').value.trim();
+    const role = document.getElementById('admin-role').value;
+    const note = document.getElementById('admin-note').value.trim();
+
+    if (!name || !userId) {
+        showToast('Vui lòng nhập tên và LINE User ID!', 'warning');
+        return;
+    }
+
+    const adminId = id || ('adm_' + Date.now());
+    const adminObj = {
+        name,
+        userId,
+        role,
+        note,
+        active: true,
+        updatedAt: new Date().toISOString()
+    };
+
+    // Cập nhật state cục bộ
+    const existingIdx = appState.admins.findIndex(a => a.id === adminId);
+    if (existingIdx !== -1) {
+        appState.admins[existingIdx] = { ...appState.admins[existingIdx], ...adminObj };
+    } else {
+        appState.admins.push({ id: adminId, ...adminObj });
+    }
+
+    renderAdminsTable();
+    closeAdminModal();
+    showToast('Đang lưu thông tin Admin lên Firebase...', 'info');
+
+    // Đẩy lên Firebase
+    const url = getFirebaseEndpoint(`/admins/${adminId}.json`);
+    fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(adminObj)
+    })
+    .then(r => r.json())
+    .then(() => {
+        showToast(`Đã lưu Admin ${name} thành công! Có hiệu lực ngay lập tức.`, 'success');
+    })
+    .catch(err => {
+        console.error('Lỗi lưu admin:', err);
+        showToast('Lỗi khi lưu lên Firebase!', 'error');
+    });
+}
+
+function toggleAdminStatus(adminId) {
+    const target = appState.admins.find(a => a.id === adminId);
+    if (!target) return;
+
+    target.active = !(target.active !== false);
+    renderAdminsTable();
+
+    const url = getFirebaseEndpoint(`/admins/${adminId}.json`);
+    fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: target.active, updatedAt: new Date().toISOString() })
+    })
+    .then(() => {
+        showToast(`Đã ${target.active ? 'kích hoạt' : 'tạm khóa'} Admin ${target.name}!`, 'success');
+    })
+    .catch(err => console.error(err));
+}
+
+function deleteAdminPrompt(adminId) {
+    const target = appState.admins.find(a => a.id === adminId);
+    if (!target) return;
+
+    if (confirm(`Bạn có chắc chắn muốn xóa quyền Admin của "${target.name}" (${target.userId}) không?`)) {
+        appState.admins = appState.admins.filter(a => a.id !== adminId);
+        renderAdminsTable();
+
+        const url = getFirebaseEndpoint(`/admins/${adminId}.json`);
+        fetch(url, { method: 'DELETE' })
+        .then(() => {
+            showToast(`Đã xóa Admin ${target.name} khỏi hệ thống!`, 'success');
+        })
+        .catch(err => console.error(err));
+    }
+}
+
+function handleApprovalModeChange(mode) {
+    const isAuto = mode === 'auto';
+    updateApprovalModeUi(isAuto);
+
+    appState.settings = appState.settings || {};
+    appState.settings.autoApprove = isAuto;
+
+    const url = getFirebaseEndpoint('/settings.json');
+    fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autoApprove: isAuto, updatedAt: new Date().toISOString() })
+    })
+    .then(() => {
+        showToast(`Đã chuyển sang chế độ: ${isAuto ? 'Tự động phát mã tức thì ⚡' : 'Duyệt thủ công qua lệnh DUYỆT 🛡️'}!`, 'success');
+    })
+    .catch(err => console.error(err));
+}
+
+function updateApprovalModeUi(autoApprove) {
+    const manualRadio = document.getElementById('mode-manual');
+    const autoRadio = document.getElementById('mode-auto');
+    const manualLabel = document.getElementById('label-mode-manual');
+    const autoLabel = document.getElementById('label-mode-auto');
+
+    if (manualRadio && autoRadio) {
+        manualRadio.checked = !autoApprove;
+        autoRadio.checked = autoApprove;
+    }
+
+    if (manualLabel && autoLabel) {
+        if (autoApprove) {
+            autoLabel.style.borderColor = '#4F46E5';
+            autoLabel.style.background = '#EEF2FF';
+            manualLabel.style.borderColor = '#E2E8F0';
+            manualLabel.style.background = 'transparent';
+        } else {
+            manualLabel.style.borderColor = '#16A34A';
+            manualLabel.style.background = '#F0FDF4';
+            autoLabel.style.borderColor = '#E2E8F0';
+            autoLabel.style.background = 'transparent';
+        }
+    }
 }

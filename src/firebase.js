@@ -205,6 +205,63 @@ const Firebase = {
     },
 
     /**
+     * Lấy danh sách Admin từ Firebase
+     */
+    async getAdmins() {
+        try {
+            const res = await axios.get(`${dbUrl}/admins.json`, { timeout: 5000 });
+            const data = res.data;
+            if (!data) return [];
+            if (Array.isArray(data)) return data.filter(Boolean);
+            return Object.entries(data).map(([id, val]) => ({ id, ...val }));
+        } catch (error) {
+            console.error('[Firebase] Lỗi getAdmins:', error.message);
+            return [];
+        }
+    },
+
+    /**
+     * Lưu hoặc cập nhật thông tin Admin
+     */
+    async saveAdmin(adminData) {
+        try {
+            if (adminData.id) {
+                const id = adminData.id;
+                delete adminData.id;
+                await axios.patch(`${dbUrl}/admins/${id}.json`, {
+                    ...adminData,
+                    updatedAt: new Date().toISOString()
+                }, { timeout: 5000 });
+                return id;
+            } else {
+                const res = await axios.post(`${dbUrl}/admins.json`, {
+                    ...adminData,
+                    active: adminData.active !== undefined ? adminData.active : true,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                }, { timeout: 5000 });
+                return res.data ? res.data.name : null;
+            }
+        } catch (error) {
+            console.error('[Firebase] Lỗi saveAdmin:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * Xóa Admin khỏi Firebase
+     */
+    async deleteAdmin(adminId) {
+        try {
+            await axios.delete(`${dbUrl}/admins/${adminId}.json`, { timeout: 5000 });
+            return true;
+        } catch (error) {
+            console.error('[Firebase] Lỗi deleteAdmin:', error.message);
+            return false;
+        }
+    },
+
+    /**
      * Ghi log hệ thống lên Firebase
      */
     async logSystem(tag, message) {

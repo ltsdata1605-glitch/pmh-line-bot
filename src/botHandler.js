@@ -19,9 +19,15 @@ setInterval(() => {
     }
 }, 15 * 60 * 1000);
 
-function isAdmin(userId) {
+async function isAdmin(userId) {
     if (!userId) return false;
-    return CONFIG.ADMIN_IDS.includes(userId);
+    if (CONFIG.ADMIN_IDS.includes(userId)) return true;
+    try {
+        const admins = await Firebase.getAdmins();
+        return admins.some(a => (a.userId === userId || a.lineId === userId) && a.active !== false);
+    } catch (e) {
+        return false;
+    }
 }
 
 function isAdminApprovalCommand(text) {
@@ -65,9 +71,46 @@ async function handleLineEvent(event) {
 
     // 1. Lệnh DUYỆT của Admin
     if (isAdminApprovalCommand(text)) {
-        if (isAdmin(userId)) {
+        const hasAdminPermission = await isAdmin(userId);
+        if (hasAdminPermission) {
             const quotedMsgId = event.message.quotedMessageId || null;
             await handleAdminApproval(userId, replyToken, sourceId, text, quotedMsgId, quoteToken);
+        }
+        return;
+    }
+
+    // 1.5 Đăng ký / Tra cứu Admin qua tin nhắn riêng (gõ "admin")
+    if (isPrivateChat && lowerText === 'admin') {
+        const displayName = await lineClient.getDisplayName(userId);
+        const admins = await Firebase.getAdmins();
+        const existing = admins.find(a => a.userId === userId || a.lineId === userId);
+
+        if (existing) {
+            const msg = `👑 Chào ${displayName}!\n` +
+                `Thông tin LINE Admin của bạn đã có trên hệ thống:\n` +
+                `• Tên Admin: ${existing.name || displayName}\n` +
+                `• LINE User ID: ${userId}\n` +
+                `• Quyền hạn: Quản trị & Duyệt mã PMH\n` +
+                `• Trạng thái: ${existing.active !== false ? 'Đang kích hoạt 🟢' : 'Đang tạm khóa 🔴'}\n` +
+                `------------------------\n` +
+                `💡 Bạn có thể dùng lệnh "DUYỆT" hoặc "OK" trong nhóm để phát mã PMH cho Quản lý.`;
+            await lineClient.replyText(replyToken, msg, quoteToken);
+        } else {
+            await Firebase.saveAdmin({
+                name: displayName,
+                userId: userId,
+                role: 'ADMIN',
+                active: true,
+                note: 'Tự động khai báo qua LINE'
+            });
+            const msg = `🎉 CHÚC MỪNG ${displayName}!\n` +
+                `Bạn đã được KHAI BÁO THÀNH CÔNG vào danh sách Admin trên hệ thống:\n` +
+                `• Tên Admin: ${displayName}\n` +
+                `• LINE User ID: ${userId}\n` +
+                `• Quyền hạn: Duyệt mã & Quản lý kho PMH\n` +
+                `------------------------\n` +
+                `💡 Bạn có thể dùng lệnh "DUYỆT" hoặc "OK" trong nhóm chat để phát mã PMH cho Quản lý.`;
+            await lineClient.replyText(replyToken, msg, quoteToken);
         }
         return;
     }
@@ -92,7 +135,8 @@ async function handleLineEvent(event) {
 
     // 4. Lệnh Hướng Dẫn (hd)
     if (lowerText === 'hd') {
-        if (isAdmin(userId) && isPrivateChat) {
+        const hasAdminPermission = await isAdmin(userId);
+        if (hasAdminPermission && isPrivateChat) {
             const guide = [
                 '📖 HƯỚNG DẪN DÀNH CHO ADMIN:',
                 '------------------------',
@@ -111,15 +155,18 @@ async function handleLineEvent(event) {
     }
 
     // 5. Lệnh bật/tắt Tự động duyệt (Admin nhắn riêng)
-    if (isPrivateChat && isAdmin(userId) && (lowerText === 'auto on' || lowerText === 'auto off')) {
-        const isEnable = lowerText === 'auto on';
-        await Firebase.updateSettings({ autoApprove: isEnable });
+    if (isPrivateChat && (lowerText === 'auto on' || lowerText === 'auto off')) {
+        const hasAdminPermission = await isAdmin(userId);
+        if (hasAdminPermission) {
+            const isEnable = lowerText === 'auto on';
+            await Firebase.updateSettings({ autoApprove: isEnable });
 
-        const msg = isEnable
-            ? '🤖 ĐÃ BẬT TÍNH NĂNG TỰ ĐỘNG GỬI PMH!\n------------------------\n💡 Khi có yêu cầu PMH hợp lệ, BOT sẽ tự động trả lời trích dẫn phát mã ngay lập tức.'
-            : '📴 ĐÃ TẮT TÍNH NĂNG TỰ ĐỘNG GỬI PMH!\n------------------------\n💡 BOT sẽ ghi nhận đơn ở trạng thái chờ duyệt (Admin duyệt qua lệnh DUYỆT hoặc OK).';
-        await lineClient.replyText(replyToken, msg, quoteToken);
-        return;
+            const msg = isEnable
+                ? '🤖 ĐÃ BẬT TÍNH NĂNG TỰ ĐỘNG GỬI PMH!\n------------------------\n💡 Khi có yêu cầu PMH hợp lệ, BOT sẽ tự động trả lời trích dẫn phát mã ngay lập tức.'
+                : '📴 ĐÃ TẮT TÍNH NĂNG TỰ ĐỘNG GỬI PMH!\n------------------------\n💡 BOT sẽ ghi nhận đơn ở trạng thái chờ duyệt (Admin duyệt qua lệnh DUYỆT hoặc OK).';
+            await lineClient.replyText(replyToken, msg, quoteToken);
+            return;
+        }
     }
 
     // 6. Kiểm tra Form xin mã PMH từ Quản lý

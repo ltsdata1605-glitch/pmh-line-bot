@@ -100,6 +100,11 @@
                     <i class="fa-solid fa-file-code"></i>
                     <span>Quản Lý Cú Pháp</span>
                 </button>
+                <button class="nav-item" data-tab="admins" onclick="switchTab('admins')">
+                    <i class="fa-solid fa-user-shield"></i>
+                    <span>Khai Báo Admin</span>
+                    <span class="badge badge-stock" id="badge-total-admins" style="background: #EEF2FF; color: #4F46E5; border-color: #C7D2FE;">1</span>
+                </button>
             </nav>
 
             <div class="sidebar-footer">
@@ -440,6 +445,102 @@
                     </div>
                 </div>
             </section>
+
+            <!-- ==================== TAB 4: KHAI BÁO & QUẢN LÝ ADMIN ==================== -->
+            <section id="tab-admins" class="tab-pane">
+                <!-- Row 1: Cấu hình chế độ duyệt & Hướng dẫn -->
+                <div class="metrics-grid" style="grid-template-columns: 1.2fr 1fr; margin-bottom: 24px;">
+                    <!-- Card Cấu hình phê duyệt -->
+                    <div class="content-section" style="margin-bottom: 0;">
+                        <div class="section-header" style="margin-bottom: 16px;">
+                            <div>
+                                <h3 style="font-size: 1.05rem; font-weight: 700; color: #0F172A;"><i class="fa-solid fa-sliders" style="color: var(--primary); margin-right: 8px;"></i>Cấu Hình Phê Duyệt & Phát Mã PMH</h3>
+                                <p style="font-size: 0.85rem; color: #64748B;">Lựa chọn cơ chế cấp mã khi Quản lý gửi yêu cầu trên nhóm LINE</p>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 14px;">
+                            <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1.5px solid #E2E8F0; border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s;" id="label-mode-manual">
+                                <input type="radio" name="approval-mode" id="mode-manual" value="manual" checked onchange="handleApprovalModeChange('manual')" style="margin-top: 3px;">
+                                <div>
+                                    <strong style="color: #0F172A; font-size: 0.92rem;">Duyệt Thủ Công (Khuyên Dùng 🛡️)</strong>
+                                    <p style="margin: 3px 0 0 0; font-size: 0.82rem; color: #64748B;">Admin trong danh sách gõ lệnh <code>DUYỆT</code> hoặc <code>OK</code> trong nhóm để phê duyệt phát mã trích dẫn.</p>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1.5px solid #E2E8F0; border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s;" id="label-mode-auto">
+                                <input type="radio" name="approval-mode" id="mode-auto" value="auto" onchange="handleApprovalModeChange('auto')" style="margin-top: 3px;">
+                                <div>
+                                    <strong style="color: #0F172A; font-size: 0.92rem;">Tự Động Phát Mã Tức Thì (Auto ⚡)</strong>
+                                    <p style="margin: 3px 0 0 0; font-size: 0.82rem; color: #64748B;">Khi Quản lý gửi đúng form, BOT tự động lấy mã từ kho và phát ngay lập tức không cần Admin duyệt.</p>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div style="margin-top: 16px; display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid #F1F5F9;">
+                            <span style="font-size: 0.85rem; color: #64748B;">Lệnh duyệt hiện tại: <strong style="color: #0F172A;">DUYỆT</strong> (hoặc OK)</span>
+                            <span id="approval-mode-status" style="font-size: 0.82rem; font-weight: 600; color: #16A34A;"><i class="fa-solid fa-circle-check"></i> Đã đồng bộ với Bot</span>
+                        </div>
+                    </div>
+
+                    <!-- Card Hướng dẫn lấy LINE User ID -->
+                    <div class="content-section" style="margin-bottom: 0; background: #F8FAFC;">
+                        <div class="section-header" style="margin-bottom: 12px;">
+                            <div>
+                                <h3 style="font-size: 1.05rem; font-weight: 700; color: #0F172A;"><i class="fa-brands fa-line" style="color: #00B900; margin-right: 8px;"></i>Khai Báo Nhanh Qua LINE</h3>
+                                <p style="font-size: 0.85rem; color: #64748B;">Tự động thêm Admin chỉ với 1 tin nhắn</p>
+                            </div>
+                        </div>
+
+                        <div style="font-size: 0.88rem; color: #334155; line-height: 1.6;">
+                            <p style="margin: 0 0 10px 0;">Để cấp quyền Admin cho bất kỳ ai (hoặc chính bạn):</p>
+                            <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px;">
+                                <li>Mở ứng dụng <strong>LINE</strong> trên điện thoại/máy tính.</li>
+                                <li>Tìm kiếm và nhắn tin riêng trực tiếp cho BOT chữ: <code style="background: #E2E8F0; padding: 2px 8px; border-radius: 4px; font-weight: 700; color: #0F172A;">admin</code></li>
+                                <li>BOT sẽ tự động đọc User ID của bạn và <strong>thêm vào danh sách Admin bên dưới ngay lập tức!</strong></li>
+                            </ol>
+                        </div>
+                        <div style="margin-top: 14px; padding: 8px 12px; background: #ECFDF5; border-radius: var(--radius-sm); border: 1px solid #A7F3D0; font-size: 0.8rem; color: #065F46;">
+                            <i class="fa-solid fa-circle-info"></i> Không cần khởi động lại Server hay chỉnh sửa biến môi trường khi thêm Admin mới!
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 2: Bảng danh sách Admin -->
+                <div class="content-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Danh Sách Admin Có Quyền Phê Duyệt</h2>
+                            <p>Các tài khoản LINE được phép gõ lệnh DUYỆT hoặc quản trị hệ thống</p>
+                        </div>
+                        <div class="section-actions">
+                            <button class="btn btn-primary" onclick="openAddAdminModal()">
+                                <i class="fa-solid fa-user-plus"></i>
+                                <span>Thêm Admin LINE</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th width="60">STT</th>
+                                    <th>Tên Admin</th>
+                                    <th>LINE User ID</th>
+                                    <th>Quyền Hạn</th>
+                                    <th>Trạng Thái</th>
+                                    <th>Ghi Chú</th>
+                                    <th class="text-right">Hành Động</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admins-tbody">
+                                <!-- Rendered dynamically by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -553,6 +654,62 @@ NDYXIKJL0L	ML200..." rows="8" oninput="previewBulkImport()"></textarea>
                     <span>Lưu Vào Kho Dữ Liệu</span>
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL 2: THÊM / SỬA ADMIN LINE ==================== -->
+    <div id="modal-admin" class="modal-overlay hidden">
+        <div class="modal-box" style="max-width: 500px;">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <div class="modal-icon-badge"><i class="fa-solid fa-user-shield"></i></div>
+                    <div>
+                        <h3 id="modal-admin-title">Thêm Admin LINE</h3>
+                        <p>Khai báo tài khoản LINE có quyền phê duyệt phát mã</p>
+                    </div>
+                </div>
+                <button class="btn-close-modal" onclick="closeAdminModal()">&times;</button>
+            </div>
+
+            <form id="form-admin" onsubmit="handleSaveAdmin(event)">
+                <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+                    <input type="hidden" id="admin-edit-id" value="">
+                    
+                    <div class="form-group">
+                        <label for="admin-name"><i class="fa-solid fa-user"></i> Tên Quản Trị / Tên LINE <span class="text-danger">*</span></label>
+                        <input type="text" id="admin-name" placeholder="VD: Anh Sơn, Chị Linh..." required class="form-control">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin-user-id"><i class="fa-brands fa-line"></i> LINE User ID <span class="text-danger">*</span></label>
+                        <input type="text" id="admin-user-id" placeholder="VD: U272dcb226f96e4e17e561b19ba8ab679" required class="form-control" style="font-family: monospace;">
+                        <small style="color: #64748B; font-size: 0.78rem; margin-top: 4px; display: block;">
+                            💡 Mẹo: Nhắn chữ "admin" riêng cho Bot LINE để Bot tự gửi User ID về cho bạn.
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin-role"><i class="fa-solid fa-shield-halved"></i> Vai Trò</label>
+                        <select id="admin-role" class="form-control">
+                            <option value="ADMIN">Quản Trị Viên (Duyệt Đơn & Quản Lý Kho)</option>
+                            <option value="APPROVER">Người Phê Duyệt (Chỉ Duyệt Đơn)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin-note"><i class="fa-regular fa-note-sticky"></i> Ghi Chú (Tùy chọn)</label>
+                        <input type="text" id="admin-note" placeholder="VD: Quản lý kho chính..." class="form-control">
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeAdminModal()">Hủy</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa-solid fa-check"></i>
+                        <span>Lưu Khai Báo</span>
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
