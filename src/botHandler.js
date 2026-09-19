@@ -287,6 +287,29 @@ async function handleLineEvent(event) {
         }
     }
 
+    // 1.95 Lệnh Xem Danh Sách Từ Khoá (/tukhoa, từ khóa, tu khoa)
+    if (lowerText === '/tukhoa' || lowerText === 'tukhoa' || lowerText === 'từ khóa' || lowerText === 'tu khoa' || lowerText === 'từ khoá') {
+        const keywords = await Firebase.getKeywords();
+        const activeKws = keywords.filter(k => k.active !== false);
+
+        if (activeKws.length === 0) {
+            await lineClient.replyText(replyToken, 'ℹ️ Chưa có từ khoá nào được cấu hình trong thư viện. Admin có thể thêm tại Web Quản Trị: https://pmh-line-bot.onrender.com', quoteToken);
+        } else {
+            const lines = activeKws.map(k => {
+                const preview = (k.reply_text || '').replace(/\s+/g, ' ').trim();
+                const snippet = preview.length > 35 ? preview.slice(0, 35) + '...' : preview;
+                const hasImg = (k.image_urls && k.image_urls.length > 0) || k.image_url ? ' 🖼️' : '';
+                return `• #${k.keyword} — ${snippet}${hasImg}`;
+            });
+            const msg = `🏷️ DANH SÁCH TỪ KHOÁ TỰ ĐỘNG (${activeKws.length} từ khoá):\n------------------------\n` +
+                `Gõ từ khoá để nhận phản hồi tự động:\n\n` +
+                lines.join('\n') +
+                `\n------------------------\n💡 Gõ "cp" để lấy mẫu xin PMH, "tk" xem tồn kho.`;
+            await lineClient.replyText(replyToken, msg, quoteToken);
+        }
+        return;
+    }
+
     // 2. Lệnh Cú Pháp (cp / cú pháp)
     const isCp = lowerText === 'cp' || lowerText.startsWith('cp ') || lowerText === 'cú pháp' || lowerText === 'cu phap' || lowerText === '.cp' || lowerText === '/cp';
     if (isCp) {
@@ -324,15 +347,65 @@ async function handleLineEvent(event) {
                 '• "dslich": Xem danh sách các lịch thông báo.',
                 '• "hengio [HH:mm] [Nội dung]": Đặt lịch thông báo hàng ngày.',
                 '• "thongbao [Nội dung]": Phát sóng tức thì tới tất cả nhóm.',
+                '• "/tukhoa": Xem danh sách từ khoá tự động.',
                 '• "tk": Xem thống kê tồn kho các loại PMH.',
                 '• "cp": Xem cú pháp đăng ký hiện tại.'
             ].join(NL);
             await lineClient.replyText(replyToken, guide, quoteToken);
         } else {
             const syntax = await Firebase.getSyntax();
-            await lineClient.replyText(replyToken, syntax || '💡 Gõ "cp" để lấy mẫu xin PMH.', quoteToken);
+            await lineClient.replyText(replyToken, syntax || '💡 Gõ "cp" để lấy mẫu xin PMH, "/tukhoa" xem danh sách từ khoá.', quoteToken);
         }
         return;
+    }
+
+    // 4.5 Kiểm tra phản hồi theo Thư Viện Từ Khoá (Keyword Auto-Reply)
+    const keywordMatch = await Firebase.findKeywordReply(text);
+    if (keywordMatch) {
+        console.log(`[BOT] Khớp từ khoá: "${keywordMatch.keyword}"! Đang gửi phản hồi (Text + Images)...`);
+        const messages = [];
+
+        // 1. Tin nhắn văn bản
+        if (keywordMatch.reply_text) {
+            const textMsg = {
+                type: 'text',
+                text: keywordMatch.reply_text
+            };
+            if (quoteToken) {
+                textMsg.quoteToken = quoteToken;
+            }
+            messages.push(textMsg);
+        }
+
+        // 2. Tin nhắn hình ảnh (tối đa 4 ảnh, để tổng số message <= 5)
+        let rawImages = [];
+        if (keywordMatch.image_urls && Array.isArray(keywordMatch.image_urls) && keywordMatch.image_urls.length > 0) {
+            rawImages = keywordMatch.image_urls.filter(Boolean);
+        } else if (keywordMatch.image_url) {
+            rawImages = [keywordMatch.image_url];
+        }
+
+        const availableSlots = 5 - messages.length;
+        const imagesToPush = rawImages.slice(0, availableSlots);
+
+        for (const imgUrl of imagesToPush) {
+            messages.push({
+                type: 'image',
+                originalContentUrl: imgUrl,
+                previewImageUrl: imgUrl
+            });
+        }
+
+        if (messages.length > 0) {
+            await lineClient.replyMessages(replyToken, messages);
+            Firebase.logSystem('KEYWORD_TRIGGERED', {
+                keyword: keywordMatch.keyword,
+                userId: userId,
+                sourceId: sourceId,
+                imageCount: imagesToPush.length
+            }).catch(() => {});
+            return;
+        }
     }
 
     // 5. Lệnh bật/tắt Tự động duyệt (Admin nhắn riêng)

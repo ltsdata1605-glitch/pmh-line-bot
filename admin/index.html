@@ -110,6 +110,11 @@
                     <span>Hẹn Giờ Thông Báo</span>
                     <span class="badge badge-stock" id="badge-total-schedules" style="background: #ECFDF5; color: #059669; border-color: #A7F3D0;">0</span>
                 </button>
+                <button class="nav-item" data-tab="keywords" onclick="switchTab('keywords')">
+                    <i class="fa-solid fa-spell-check"></i>
+                    <span>Từ Khoá Tự Động</span>
+                    <span class="badge badge-stock" id="badge-total-keywords" style="background: #FEF3C7; color: #D97706; border-color: #FDE68A;">0</span>
+                </button>
             </nav>
 
             <div class="sidebar-footer">
@@ -696,6 +701,69 @@
                     </div>
                 </div>
             </section>
+
+            <!-- ==================== TAB 6: THƯ VIỆN TỪ KHOÁ (KEYWORDS) ==================== -->
+            <section id="tab-keywords" class="tab-pane">
+                <!-- Thẻ thống kê tổng quan từ khoá -->
+                <div class="metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-bottom: 24px;">
+                    <div class="metric-card" style="border-left: 4px solid #6366F1;">
+                        <div class="metric-icon" style="background: #EEF2FF; color: #4F46E5;">
+                            <i class="fa-solid fa-spell-check"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">Tổng Số Từ Khoá</div>
+                            <div class="metric-value" id="stat-total-keywords">0</div>
+                            <div class="metric-hint"><span id="stat-active-keywords-sub">0</span> từ khoá đang bật</div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card" style="border-left: 4px solid #10B981;">
+                        <div class="metric-icon" style="background: #ECFDF5; color: #059669;">
+                            <i class="fa-regular fa-image"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">Từ Khoá Có Hình Ảnh</div>
+                            <div class="metric-value" id="stat-keywords-with-images">0</div>
+                            <div class="metric-hint" style="color: #059669;"><i class="fa-solid fa-circle-check"></i> Tự động gửi ảnh đính kèm</div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card" style="border-left: 4px solid #06B6D4;">
+                        <div class="metric-icon" style="background: #ECFEFF; color: #0891B2;">
+                            <i class="fa-solid fa-circle-nodes"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">Lệnh Tra Cứu Nhanh</div>
+                            <div class="metric-value" style="font-size: 1.15rem; font-family: monospace; color: #0891B2;">/tukhoa</div>
+                            <div class="metric-hint">Xem toàn bộ từ khoá trên LINE</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Thư Viện Từ Khoá -->
+                <div class="content-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Thư Viện Từ Khoá Phản Hồi Tự Động</h2>
+                            <p>Khi người dùng hoặc nhóm chat gõ đúng từ khoá, BOT sẽ tự động phản hồi nội dung văn bản & hình ảnh đính kèm</p>
+                        </div>
+                        <div class="section-actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <div class="search-box" style="width: 260px;">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input type="text" id="keywords-search-input" placeholder="Tìm từ khoá hoặc nội dung..." oninput="handleKeywordSearch(this.value)">
+                            </div>
+                            <button class="btn btn-primary" onclick="openAddKeywordModal()">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Thêm Từ Khoá Mới</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="keywords-grid-container" class="keywords-grid">
+                        <!-- Rendered dynamically by JS -->
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -1002,6 +1070,94 @@ NDYXIKJL0L	ML200..." rows="8" oninput="previewBulkImport()"></textarea>
                     <button type="submit" class="btn btn-primary" style="background: #D97706; border-color: #D97706;">
                         <i class="fa-solid fa-paper-plane"></i>
                         <span>Phát Thông Báo Ngay</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: THÊM / SỬA TỪ KHOÁ (KEYWORD MODAL) ==================== -->
+    <div id="modal-keyword" class="modal-overlay hidden">
+        <div class="modal-box modal-md">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <div class="modal-icon-badge" style="background: #EEF2FF; color: #4F46E5;"><i class="fa-solid fa-spell-check"></i></div>
+                    <div>
+                        <h3 id="modal-keyword-title">Thêm Từ Khoá Mới</h3>
+                        <p>Cấu hình từ khoá và nội dung kèm hình ảnh tự động phản hồi</p>
+                    </div>
+                </div>
+                <button class="btn-close-modal" onclick="closeKeywordModal()">&times;</button>
+            </div>
+
+            <form id="form-keyword" onsubmit="handleSaveKeyword(event)">
+                <input type="hidden" id="keyword-edit-id">
+                <div class="modal-body">
+                    <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 14px;">
+                        <div class="form-group">
+                            <label for="kw-keyword"><i class="fa-solid fa-hashtag"></i> Từ Khoá <span class="text-danger">*</span></label>
+                            <input type="text" id="kw-keyword" placeholder="VD: khuyenmai, baohanh, giaohang..." required class="form-control" style="font-weight: 600;">
+                            <small style="color: #64748B; font-size: 0.76rem; display: block; margin-top: 3px;">Tự động chuyển chữ thường và bỏ dấu cách thừa.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="kw-match-type"><i class="fa-solid fa-filter"></i> Kiểu So Khớp</label>
+                            <select id="kw-match-type" class="form-control">
+                                <option value="EXACT">Gõ chính xác</option>
+                                <option value="CONTAINS">Có chứa từ khoá</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="kw-reply-text"><i class="fa-solid fa-message"></i> Nội Dung Phản Hồi <span class="text-danger">*</span></label>
+                        <textarea id="kw-reply-text" rows="4" placeholder="Nhập nội dung bot sẽ phản hồi khi người dùng chat từ khoá..." required class="form-control" style="font-family: inherit; resize: vertical;"></textarea>
+                    </div>
+
+                    <!-- Khu vực Hình ảnh đính kèm -->
+                    <div class="form-group">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <label style="margin-bottom: 0;"><i class="fa-regular fa-images"></i> Hình Ảnh Đính Kèm (Tối đa 4 ảnh)</label>
+                            <span id="kw-images-count-badge" class="badge" style="background: #F1F5F9; color: #475569; font-size: 0.78rem;">0/4 ảnh</span>
+                        </div>
+
+                        <!-- Grid xem trước ảnh đã chọn -->
+                        <div id="kw-images-preview-grid" class="keyword-images-grid" style="margin-bottom: 10px;">
+                            <!-- Rendered dynamically -->
+                        </div>
+
+                        <!-- Khu vực Upload File & Nhập Link -->
+                        <div id="kw-add-image-controls" style="display: flex; flex-direction: column; gap: 8px;">
+                            <div style="display: flex; gap: 8px;">
+                                <input type="url" id="kw-image-url-input" placeholder="Dán link ảnh trực tiếp (https://...)" class="form-control" style="font-size: 0.85rem;">
+                                <button type="button" class="btn btn-outline btn-sm" onclick="handleAddKeywordImageUrl()" style="white-space: nowrap;">
+                                    <i class="fa-solid fa-plus"></i> Thêm Link
+                                </button>
+                            </div>
+
+                            <div class="image-upload-dropzone" style="border: 2px dashed #CBD5E1; border-radius: var(--radius-md); background: #F8FAFC; text-align: center; transition: all var(--transition-fast);">
+                                <label for="kw-file-input" style="cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 0; padding: 10px; color: #4F46E5; font-size: 0.86rem; font-weight: 500;">
+                                    <i class="fa-solid fa-cloud-arrow-up" style="font-size: 1.1rem;"></i>
+                                    <span id="kw-upload-status-text">Chọn ảnh từ máy (Tự động tải lên CDN ImgBB)</span>
+                                </label>
+                                <input type="file" id="kw-file-input" accept="image/*" multiple onchange="handleKeywordImageUpload(event)" style="display: none;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
+                            <input type="checkbox" id="kw-active" checked style="width: 18px; height: 18px; accent-color: #10B981;">
+                            <span>Kích hoạt từ khoá này ngay</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeKeywordModal()">Hủy</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa-solid fa-check"></i>
+                        <span>Lưu Từ Khoá</span>
                     </button>
                 </div>
             </form>

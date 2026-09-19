@@ -88,6 +88,8 @@ let appState = {
     admins: [],
     schedules: [],
     groups: [],
+    keywords: [],
+    keywordSearch: '',
     settings: { autoApprove: false },
     firebaseConfig: { ...DEFAULT_FIREBASE_CONFIG },
     filter: {
@@ -288,6 +290,11 @@ function switchTab(tabId) {
         renderSchedulesTable();
         renderGroupsList();
         updateScheduleMetrics();
+    } else if (tabId === 'keywords') {
+        titleEl.innerText = 'Thư Viện Từ Khoá Tự Động';
+        descEl.innerText = 'Quản lý danh sách từ khoá tự động phản hồi nội dung và hình ảnh khi người dùng chat';
+        renderKeywordsGrid();
+        updateKeywordMetrics();
     }
 }
 
@@ -1183,6 +1190,7 @@ function syncDataFromFirebase(isUserClick = false) {
     const settingsUrl = getFirebaseEndpoint('/settings.json');
     const schedulesUrl = getFirebaseEndpoint('/schedules.json');
     const groupsUrl = getFirebaseEndpoint('/groups.json');
+    const keywordsUrl = getFirebaseEndpoint('/keywords.json');
 
     Promise.all([
         fetch(couponsUrl).then(r => r.ok ? r.json() : null),
@@ -1190,9 +1198,10 @@ function syncDataFromFirebase(isUserClick = false) {
         fetch(adminsUrl).then(r => r.ok ? r.json() : null),
         fetch(settingsUrl).then(r => r.ok ? r.json() : null),
         fetch(schedulesUrl).then(r => r.ok ? r.json() : null),
-        fetch(groupsUrl).then(r => r.ok ? r.json() : null)
+        fetch(groupsUrl).then(r => r.ok ? r.json() : null),
+        fetch(keywordsUrl).then(r => r.ok ? r.json() : null)
     ])
-    .then(([fbCoupons, fbSyntax, fbAdmins, fbSettings, fbSchedules, fbGroups]) => {
+    .then(([fbCoupons, fbSyntax, fbAdmins, fbSettings, fbSchedules, fbGroups, fbKeywords]) => {
         showSyncing(false);
 
         if (fbCoupons && Array.isArray(fbCoupons)) {
@@ -1265,9 +1274,22 @@ function syncDataFromFirebase(isUserClick = false) {
             appState.groups = [];
         }
 
+        // Xử lý Thư Viện Từ Khoá (Keywords)
+        if (fbKeywords && typeof fbKeywords === 'object') {
+            if (Array.isArray(fbKeywords)) {
+                appState.keywords = fbKeywords.filter(Boolean);
+            } else {
+                appState.keywords = Object.entries(fbKeywords).map(([id, k]) => ({ id, ...k }));
+            }
+        } else {
+            appState.keywords = [];
+        }
+
         renderSchedulesTable();
         renderGroupsList();
         updateScheduleMetrics();
+        renderKeywordsGrid();
+        updateKeywordMetrics();
 
         if (isUserClick) {
             showToast('Đã đồng bộ dữ liệu mới nhất từ Firebase!', 'success');
@@ -2230,4 +2252,374 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+// ==================== 16. THƯ VIỆN TỪ KHOÁ TỰ ĐỘNG (KEYWORDS) ====================
+const IMGBB_API_KEY = '043aad4c1ec156b8711e30fe9444cdb9';
+let keywordModalImages = [];
+
+function renderKeywordsGrid() {
+    const container = document.getElementById('keywords-grid-container');
+    const badgeCount = document.getElementById('badge-total-keywords');
+    if (!container) return;
+
+    const keywords = appState.keywords || [];
+    const activeCount = keywords.filter(k => k.active !== false).length;
+    if (badgeCount) badgeCount.innerText = activeCount;
+
+    const searchTerm = (appState.keywordSearch || '').trim().toLowerCase();
+    const filtered = keywords.filter(kw => {
+        if (!searchTerm) return true;
+        const kwText = String(kw.keyword || '').toLowerCase();
+        const replyText = String(kw.reply_text || '').toLowerCase();
+        return kwText.includes(searchTerm) || replyText.includes(searchTerm);
+    });
+
+    container.innerHTML = '';
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 48px 20px; background: #FFFFFF; border: 1px dashed var(--border-color); border-radius: var(--radius-lg);">
+                <div style="font-size: 2.2rem; color: #94A3B8; margin-bottom: 10px;"><i class="fa-solid fa-spell-check"></i></div>
+                <h3 style="font-size: 1.1rem; color: #0F172A; margin-bottom: 6px;">${searchTerm ? 'Không tìm thấy từ khoá phù hợp' : 'Chưa có từ khoá nào trong thư viện'}</h3>
+                <p style="font-size: 0.86rem; color: var(--text-muted); margin-bottom: 16px;">
+                    ${searchTerm ? 'Thử tìm với từ khoá khác hoặc tạo mới' : 'Nhấn nút bên dưới để tạo từ khoá tự động phản hồi đầu tiên cho BOT LINE'}
+                </p>
+                <button class="btn btn-primary btn-sm" onclick="openAddKeywordModal()">
+                    <i class="fa-solid fa-plus"></i> Thêm Từ Khoá Mới
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(kw => {
+        const card = document.createElement('div');
+        card.className = 'keyword-card';
+        const isActive = kw.active !== false;
+
+        let rawUrls = [];
+        if (kw.image_urls && Array.isArray(kw.image_urls) && kw.image_urls.length > 0) {
+            rawUrls = kw.image_urls.filter(Boolean);
+        } else if (kw.image_url) {
+            rawUrls = [kw.image_url];
+        }
+
+        const matchBadge = kw.matchType === 'CONTAINS'
+            ? '<span class="status-badge" style="background: #E0F2FE; color: #0369A1; border: 1px solid #BAE6FD; font-size: 0.74rem;">Chứa từ khoá</span>'
+            : '<span class="status-badge" style="background: #EEF2FF; color: #4F46E5; border: 1px solid #C7D2FE; font-size: 0.74rem;">Chính xác</span>';
+
+        // Danh sách ảnh đính kèm
+        let imagesHtml = '';
+        if (rawUrls.length > 0) {
+            const thumbs = rawUrls.map(url => `
+                <a href="${url}" target="_blank" title="Xem ảnh gốc" style="display: block; width: 44px; height: 44px; border-radius: 8px; overflow: hidden; border: 1px solid #E2E8F0; flex-shrink: 0;">
+                    <img src="${url}" alt="Ảnh đính kèm" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://placehold.co/44x44?text=ERR'">
+                </a>
+            `).join('');
+            imagesHtml = `
+                <div style="display: flex; gap: 6px; align-items: center; margin-top: 10px; overflow-x: auto; padding-bottom: 2px;">
+                    ${thumbs}
+                    <span style="font-size: 0.75rem; color: #64748B; margin-left: 2px;">(${rawUrls.length} ảnh)</span>
+                </div>
+            `;
+        }
+
+        card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <span class="keyword-pill">#${escapeHtml(kw.keyword)}</span>
+                    ${matchBadge}
+                </div>
+                <div class="table-actions">
+                    <button class="btn-icon" title="${isActive ? 'Tạm tắt từ khoá' : 'Bật từ khoá'}" onclick="toggleKeywordStatus('${kw.id}')" style="color: ${isActive ? '#16A34A' : '#64748B'};">
+                        <i class="fa-solid ${isActive ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
+                    </button>
+                    <button class="btn-icon" title="Chỉnh sửa từ khoá" onclick="openAddKeywordModal('${kw.id}')">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button class="btn-icon danger" title="Xóa từ khoá" onclick="deleteKeywordPrompt('${kw.id}')">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="keyword-reply-text" title="${escapeHtml(kw.reply_text || '')}">
+                ${escapeHtml(kw.reply_text || '')}
+            </div>
+
+            ${imagesHtml}
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #E2E8F0; font-size: 0.76rem; color: #94A3B8;">
+                <span>${kw.updatedAt ? formatDate(kw.updatedAt) : ''}</span>
+                <span style="color: ${isActive ? '#16A34A' : '#94A3B8'}; font-weight: 500;">
+                    ${isActive ? '🟢 Đang hoạt động' : '⚪ Đang tắt'}
+                </span>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+function updateKeywordMetrics() {
+    const keywords = appState.keywords || [];
+    const totalEl = document.getElementById('stat-total-keywords');
+    const activeSubEl = document.getElementById('stat-active-keywords-sub');
+    const imgEl = document.getElementById('stat-keywords-with-images');
+
+    if (totalEl) totalEl.innerText = keywords.length;
+    if (activeSubEl) activeSubEl.innerText = keywords.filter(k => k.active !== false).length;
+    if (imgEl) imgEl.innerText = keywords.filter(k => (k.image_urls && k.image_urls.length > 0) || k.image_url).length;
+}
+
+function handleKeywordSearch(query) {
+    appState.keywordSearch = query;
+    renderKeywordsGrid();
+}
+
+function openAddKeywordModal(editId = null) {
+    const modal = document.getElementById('modal-keyword');
+    const titleEl = document.getElementById('modal-keyword-title');
+    const idInput = document.getElementById('keyword-edit-id');
+    const kwInput = document.getElementById('kw-keyword');
+    const matchTypeInput = document.getElementById('kw-match-type');
+    const replyInput = document.getElementById('kw-reply-text');
+    const activeInput = document.getElementById('kw-active');
+    const urlInput = document.getElementById('kw-image-url-input');
+
+    urlInput.value = '';
+    keywordModalImages = [];
+
+    if (editId) {
+        const target = appState.keywords.find(k => k.id === editId);
+        if (target) {
+            titleEl.innerText = 'Chỉnh Sửa Từ Khoá';
+            idInput.value = target.id;
+            kwInput.value = target.keyword || '';
+            matchTypeInput.value = target.matchType || 'EXACT';
+            replyInput.value = target.reply_text || '';
+            activeInput.checked = target.active !== false;
+
+            if (target.image_urls && Array.isArray(target.image_urls)) {
+                keywordModalImages = [...target.image_urls];
+            } else if (target.image_url) {
+                keywordModalImages = [target.image_url];
+            }
+        }
+    } else {
+        titleEl.innerText = 'Thêm Từ Khoá Mới';
+        idInput.value = '';
+        kwInput.value = '';
+        matchTypeInput.value = 'EXACT';
+        replyInput.value = '';
+        activeInput.checked = true;
+    }
+
+    renderKeywordModalImages();
+    modal.classList.remove('hidden');
+}
+
+function closeKeywordModal() {
+    const modal = document.getElementById('modal-keyword');
+    if (modal) modal.classList.add('hidden');
+}
+
+function renderKeywordModalImages() {
+    const grid = document.getElementById('kw-images-preview-grid');
+    const countBadge = document.getElementById('kw-images-count-badge');
+    const controls = document.getElementById('kw-add-image-controls');
+    if (!grid) return;
+
+    if (countBadge) countBadge.innerText = `${keywordModalImages.length}/4 ảnh`;
+
+    if (controls) {
+        if (keywordModalImages.length >= 4) {
+            controls.style.display = 'none';
+        } else {
+            controls.style.display = 'flex';
+        }
+    }
+
+    if (keywordModalImages.length === 0) {
+        grid.innerHTML = '<div style="font-size: 0.8rem; color: #94A3B8; font-style: italic; padding: 4px 0;">Chưa có ảnh nào được đính kèm.</div>';
+        return;
+    }
+
+    grid.innerHTML = keywordModalImages.map((url, idx) => `
+        <div style="position: relative; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 1px solid #CBD5E1; box-shadow: 0 1px 3px rgba(0,0,0,0.1); flex-shrink: 0;">
+            <img src="${url}" alt="Preview ${idx + 1}" style="width: 100%; height: 100%; object-fit: cover;">
+            <button type="button" onclick="handleRemoveKeywordImage(${idx})" title="Xóa ảnh này" style="position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,0.65); color: #FFF; border: none; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function handleAddKeywordImageUrl() {
+    const input = document.getElementById('kw-image-url-input');
+    const url = (input.value || '').trim();
+    if (!url) return;
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        showToast('Link ảnh phải bắt đầu bằng http:// hoặc https://', 'warning');
+        return;
+    }
+
+    if (keywordModalImages.length >= 4) {
+        showToast('Chỉ được thêm tối đa 4 hình ảnh!', 'warning');
+        return;
+    }
+
+    keywordModalImages.push(url);
+    input.value = '';
+    renderKeywordModalImages();
+}
+
+async function handleKeywordImageUpload(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    if (keywordModalImages.length + files.length > 4) {
+        showToast('Bạn chỉ được tải lên tối đa 4 ảnh cho mỗi từ khoá!', 'warning');
+        event.target.value = '';
+        return;
+    }
+
+    const statusText = document.getElementById('kw-upload-status-text');
+    if (statusText) statusText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang tải ảnh lên CDN ImgBB...';
+
+    showToast(`Đang tải ${files.length} ảnh lên CDN...`, 'info');
+
+    try {
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = err => reject(err);
+                reader.readAsDataURL(file);
+            });
+
+            const formData = new FormData();
+            formData.append('image', base64);
+
+            const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+
+            if (data && data.success && data.data && data.data.url) {
+                keywordModalImages.push(data.data.url);
+            } else {
+                throw new Error(data.error?.message || 'Không thể upload ảnh');
+            }
+        }
+
+        renderKeywordModalImages();
+        showToast('Tải ảnh lên thành công!', 'success');
+    } catch (err) {
+        console.error('Lỗi upload ImgBB:', err);
+        showToast('Lỗi khi tải ảnh lên: ' + err.message, 'error');
+    } finally {
+        if (statusText) statusText.innerText = 'Chọn ảnh từ máy (Tự động tải lên CDN ImgBB)';
+        event.target.value = '';
+    }
+}
+
+function handleRemoveKeywordImage(index) {
+    keywordModalImages.splice(index, 1);
+    renderKeywordModalImages();
+}
+
+function handleSaveKeyword(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('keyword-edit-id').value;
+    const keyword = document.getElementById('kw-keyword').value.trim().toLowerCase();
+    const matchType = document.getElementById('kw-match-type').value;
+    const reply_text = document.getElementById('kw-reply-text').value.trim();
+    const active = document.getElementById('kw-active').checked;
+
+    if (!keyword || !reply_text) {
+        showToast('Vui lòng nhập từ khoá và nội dung phản hồi!', 'warning');
+        return;
+    }
+
+    const kwId = id || ('kw_' + Date.now());
+    const kwObj = {
+        id: kwId,
+        keyword,
+        matchType,
+        reply_text,
+        image_urls: [...keywordModalImages],
+        image_url: keywordModalImages.length > 0 ? keywordModalImages[0] : '',
+        active,
+        updatedAt: new Date().toISOString()
+    };
+
+    const existingIdx = appState.keywords.findIndex(k => k.id === kwId);
+    if (existingIdx !== -1) {
+        appState.keywords[existingIdx] = { ...appState.keywords[existingIdx], ...kwObj };
+    } else {
+        kwObj.createdAt = new Date().toISOString();
+        appState.keywords.push(kwObj);
+    }
+
+    renderKeywordsGrid();
+    updateKeywordMetrics();
+    closeKeywordModal();
+    showToast('Đang lưu từ khoá lên Firebase...', 'info');
+
+    const url = getFirebaseEndpoint(`/keywords/${kwId}.json`);
+    fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(kwObj)
+    })
+    .then(() => {
+        showToast(`Đã lưu từ khoá "#${keyword}" thành công!`, 'success');
+    })
+    .catch(err => {
+        console.error('Lỗi lưu keyword:', err);
+        showToast('Lỗi khi lưu lên Firebase: ' + err.message, 'error');
+    });
+}
+
+function toggleKeywordStatus(kwId) {
+    const target = appState.keywords.find(k => k.id === kwId);
+    if (!target) return;
+
+    target.active = !(target.active !== false);
+    renderKeywordsGrid();
+    updateKeywordMetrics();
+
+    const url = getFirebaseEndpoint(`/keywords/${kwId}.json`);
+    fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: target.active, updatedAt: new Date().toISOString() })
+    })
+    .then(() => {
+        showToast(`Đã ${target.active ? 'bật' : 'tắt'} từ khoá "#${target.keyword}"!`, 'success');
+    })
+    .catch(err => console.error(err));
+}
+
+function deleteKeywordPrompt(kwId) {
+    const target = appState.keywords.find(k => k.id === kwId);
+    if (!target) return;
+
+    if (confirm(`Bạn có chắc chắn muốn xóa từ khoá "#${target.keyword}" không?`)) {
+        appState.keywords = appState.keywords.filter(k => k.id !== kwId);
+        renderKeywordsGrid();
+        updateKeywordMetrics();
+
+        const url = getFirebaseEndpoint(`/keywords/${kwId}.json`);
+        fetch(url, { method: 'DELETE' })
+        .then(() => {
+            showToast(`Đã xóa từ khoá "#${target.keyword}"!`, 'success');
+        })
+        .catch(err => console.error(err));
+    }
 }

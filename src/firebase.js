@@ -415,6 +415,142 @@ const Firebase = {
             console.error('[Firebase] Lỗi deleteSchedule:', error.message);
             return false;
         }
+    },
+
+    /**
+     * ==================== QUẢN LÝ THƯ VIỆN TỪ KHOÁ (KEYWORDS) ====================
+     */
+
+    /**
+     * Lấy toàn bộ danh sách từ khoá tự động
+     */
+    async getKeywords() {
+        try {
+            const res = await axios.get(`${dbUrl}/keywords.json`, { timeout: 5000 });
+            const data = res.data;
+            if (!data) return [];
+            if (Array.isArray(data)) return data.filter(Boolean);
+            return Object.entries(data).map(([id, val]) => ({
+                id,
+                ...val
+            }));
+        } catch (error) {
+            console.error('[Firebase] Lỗi getKeywords:', error.message);
+            return [];
+        }
+    },
+
+    /**
+     * Lưu từ khoá mới hoặc cập nhật từ khoá
+     */
+    async saveKeyword(keywordData) {
+        if (!keywordData) return null;
+        try {
+            const id = keywordData.id || ('kw_' + Date.now());
+            const cleanKeyword = String(keywordData.keyword || '').trim().toLowerCase();
+            const payload = {
+                ...keywordData,
+                id,
+                keyword: cleanKeyword,
+                reply_text: String(keywordData.reply_text || '').trim(),
+                image_urls: Array.isArray(keywordData.image_urls) ? keywordData.image_urls.filter(Boolean) : [],
+                matchType: keywordData.matchType || 'EXACT',
+                active: keywordData.active !== undefined ? keywordData.active : true,
+                updatedAt: new Date().toISOString()
+            };
+
+            // Tương thích ngược với image_url đơn
+            if (payload.image_urls.length > 0) {
+                payload.image_url = payload.image_urls[0];
+            } else {
+                payload.image_url = '';
+            }
+
+            if (!keywordData.createdAt) {
+                payload.createdAt = new Date().toISOString();
+            }
+
+            await axios.put(`${dbUrl}/keywords/${id}.json`, payload, { timeout: 5000 });
+            return id;
+        } catch (error) {
+            console.error('[Firebase] Lỗi saveKeyword:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * Cập nhật một phần dữ liệu từ khoá
+     */
+    async updateKeyword(keywordId, data) {
+        if (!keywordId) return false;
+        try {
+            await axios.patch(`${dbUrl}/keywords/${keywordId}.json`, {
+                ...data,
+                updatedAt: new Date().toISOString()
+            }, { timeout: 5000 });
+            return true;
+        } catch (error) {
+            console.error('[Firebase] Lỗi updateKeyword:', error.message);
+            return false;
+        }
+    },
+
+    /**
+     * Xóa từ khoá khỏi Firebase
+     */
+    async deleteKeyword(keywordId) {
+        if (!keywordId) return false;
+        try {
+            await axios.delete(`${dbUrl}/keywords/${keywordId}.json`, { timeout: 5000 });
+            return true;
+        } catch (error) {
+            console.error('[Firebase] Lỗi deleteKeyword:', error.message);
+            return false;
+        }
+    },
+
+    /**
+     * Tìm kiếm từ khoá khớp với nội dung tin nhắn của người dùng
+     */
+    async findKeywordReply(text) {
+        if (!text) return null;
+        try {
+            const keywords = await this.getKeywords();
+            if (!keywords || keywords.length === 0) return null;
+
+            const cleanText = String(text).trim().toLowerCase();
+
+            // 1. Ưu tiên tìm khớp chính xác (EXACT match) trước
+            for (const kw of keywords) {
+                if (kw.active === false) continue;
+                const targetKw = String(kw.keyword || '').trim().toLowerCase();
+                if (!targetKw) continue;
+
+                if (kw.matchType === 'EXACT' || !kw.matchType) {
+                    if (cleanText === targetKw) {
+                        return kw;
+                    }
+                }
+            }
+
+            // 2. Tìm khớp có chứa (CONTAINS match)
+            for (const kw of keywords) {
+                if (kw.active === false) continue;
+                const targetKw = String(kw.keyword || '').trim().toLowerCase();
+                if (!targetKw) continue;
+
+                if (kw.matchType === 'CONTAINS') {
+                    if (cleanText.includes(targetKw)) {
+                        return kw;
+                    }
+                }
+            }
+
+            return null;
+        } catch (error) {
+            console.error('[Firebase] Lỗi findKeywordReply:', error.message);
+            return null;
+        }
     }
 };
 

@@ -41,6 +41,30 @@ const lineClient = {
     },
 
     /**
+     * Trả lời nhiều tin nhắn cùng lúc (Text + Danh sách Ảnh) qua @line/bot-sdk
+     */
+    async replyMessages(replyToken, messages) {
+        if (!replyToken || !messages || !Array.isArray(messages) || messages.length === 0) {
+            return false;
+        }
+
+        try {
+            await client.replyMessage({
+                replyToken: replyToken,
+                messages: messages.slice(0, 5) // Giới hạn tối đa 5 tin nhắn theo quy định LINE API
+            });
+            console.log(`[LINE] Phản hồi thành công ${messages.length} tin nhắn qua @line/bot-sdk!`);
+            return true;
+        } catch (error) {
+            const Firebase = require('./firebase');
+            const errData = error?.body || (error.response ? JSON.stringify(error.response.data) : (error.message || error));
+            console.error('[LINE] Lỗi replyMessages:', errData);
+            Firebase.logSystem('REPLY_MESSAGES_ERROR', { error: errData }).catch(() => {});
+            return false;
+        }
+    },
+
+    /**
      * Gửi chủ động tin nhắn (Push Message) tới User hoặc Group
      */
     async pushText(toId, text) {
