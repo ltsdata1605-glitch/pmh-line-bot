@@ -91,8 +91,21 @@ const lineClient = {
             messageObj.quoteToken = quoteToken.trim();
         }
 
-        if (quickReply) {
-            messageObj.quickReply = quickReply;
+        if (quickReply && Array.isArray(quickReply.items) && quickReply.items.length > 0) {
+            // LINE API ràng buộc: action.label trong quick reply tối đa 20 ký tự
+            const safeItems = quickReply.items.map(item => {
+                if (item?.action?.label && item.action.label.length > 20) {
+                    return {
+                        ...item,
+                        action: {
+                            ...item.action,
+                            label: item.action.label.slice(0, 20)
+                        }
+                    };
+                }
+                return item;
+            });
+            messageObj.quickReply = { items: safeItems };
         }
 
         try {
@@ -107,6 +120,22 @@ const lineClient = {
             const errData = error?.body || (error.response ? JSON.stringify(error.response.data) : (error.message || error));
             console.error('[LINE] Lỗi replyText:', errData);
             Firebase.logSystem('REPLY_ERROR', { error: errData, token: CONFIG.CHANNEL_ACCESS_TOKEN.slice(0, 10) }).catch(() => {});
+
+            // CƠ CHẾ FALLBACK TỰ ĐỘNG: Gửi tin nhắn text thuần không kèm quote/quickReply nếu gặp lỗi API
+            if (messageObj.quoteToken || messageObj.quickReply) {
+                try {
+                    console.log('[LINE] Thử gửi lại tin nhắn thuần (fallback không quote/quickReply)...');
+                    await client.replyMessage({
+                        replyToken: replyToken,
+                        messages: [{ type: 'text', text: cleanText }]
+                    });
+                    console.log('[LINE] Fallback tin nhắn thuần thành công!');
+                    return true;
+                } catch (retryError) {
+                    const retryErrData = retryError?.body || (retryError.response ? JSON.stringify(retryError.response.data) : retryError.message);
+                    console.error('[LINE] Fallback tin nhắn thuần cũng thất bại:', retryErrData);
+                }
+            }
             return false;
         }
     },
@@ -127,8 +156,20 @@ const lineClient = {
             messageObj.quoteToken = quoteToken.trim();
         }
 
-        if (quickReply) {
-            messageObj.quickReply = quickReply;
+        if (quickReply && Array.isArray(quickReply.items) && quickReply.items.length > 0) {
+            const safeItems = quickReply.items.map(item => {
+                if (item?.action?.label && item.action.label.length > 20) {
+                    return {
+                        ...item,
+                        action: {
+                            ...item.action,
+                            label: item.action.label.slice(0, 20)
+                        }
+                    };
+                }
+                return item;
+            });
+            messageObj.quickReply = { items: safeItems };
         }
 
         try {

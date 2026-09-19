@@ -643,12 +643,27 @@ async function handleLineEvent(event) {
         return;
     }
 
-    // 2. Lệnh Cú Pháp (cp / cú pháp)
-    const isCp = lowerText === 'cp' || lowerText.startsWith('cp ') || lowerText === 'cú pháp' || lowerText === 'cu phap' || lowerText === '.cp' || lowerText === '/cp';
+    // 2. Lệnh Cú Pháp (cp / cú pháp / form / mẫu)
+    const isCp = lowerText === 'cp' ||
+        lowerText.startsWith('cp ') ||
+        lowerText === 'cú pháp' ||
+        lowerText === 'cu phap' ||
+        lowerText === '.cp' ||
+        lowerText === '/cp' ||
+        lowerText === 'form' ||
+        lowerText === 'mau' ||
+        lowerText === 'mẫu' ||
+        lowerText === 'lay form' ||
+        lowerText === 'lấy form' ||
+        lowerText.includes('lấy form') ||
+        lowerText.includes('lấy cú pháp') ||
+        lowerText.includes('cú pháp form');
+
     if (isCp) {
         console.log('[BOT] Đang lấy cú pháp gửi về cho nhóm/user...');
         const syntax = await Firebase.getSyntax();
-        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu() : null;
+        const admin = await isAdmin(userId);
+        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu(admin) : null;
         if (!syntax) {
             await lineClient.replyText(replyToken, '❌ Chưa có cú pháp nào trên hệ thống Web Quản Trị.', quoteToken, quickReply);
         } else {
@@ -657,19 +672,47 @@ async function handleLineEvent(event) {
         return;
     }
 
-    // 3. Lệnh Thống Kê (tk / thống kê)
-    const isTk = lowerText === 'tk' || lowerText.startsWith('tk ') || lowerText === 'thống kê' || lowerText === 'thong ke' || lowerText === '.tk' || lowerText === '/tk';
+    // 3. Lệnh Thống Kê (tk / tồn kho / thống kê)
+    const isTk = lowerText === 'tk' ||
+        lowerText.startsWith('tk ') ||
+        lowerText === 'thống kê' ||
+        lowerText === 'thong ke' ||
+        lowerText === '.tk' ||
+        lowerText === '/tk' ||
+        lowerText === 'tonkho' ||
+        lowerText === 'ton kho' ||
+        lowerText === 'tồn kho' ||
+        lowerText.includes('tồn kho') ||
+        lowerText.includes('kiểm tra tồn');
+
     if (isTk) {
         console.log('[BOT] Đang lấy thống kê tồn kho gửi về cho nhóm/user...');
         const statsMessage = await couponService.getStatisticsMessage();
-        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu() : null;
+        const admin = await isAdmin(userId);
+        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu(admin) : null;
         await lineClient.replyText(replyToken, statsMessage, quoteToken, quickReply);
         return;
     }
 
     // 3.5 Lệnh Lịch Sử Nhận Mã (ls: trong ngày hôm nay | lsall: toàn bộ lịch sử phân theo ngày)
-    const isLsAll = lowerText === 'lsall' || lowerText === 'ls all' || lowerText === 'lichsuall' || lowerText === 'lich su all' || lowerText === '.lsall' || lowerText === '/lsall';
-    const isLsToday = !isLsAll && (lowerText === 'ls' || lowerText.startsWith('ls ') || lowerText === 'lichsu' || lowerText === 'lich su' || lowerText === 'lịch sử' || lowerText === '.ls' || lowerText === '/ls');
+    const isLsAll = lowerText === 'lsall' ||
+        lowerText === 'ls all' ||
+        lowerText === 'lichsuall' ||
+        lowerText === 'lich su all' ||
+        lowerText === '.lsall' ||
+        lowerText === '/lsall' ||
+        lowerText.includes('tất cả lịch sử');
+
+    const isLsToday = !isLsAll && (
+        lowerText === 'ls' ||
+        lowerText.startsWith('ls ') ||
+        lowerText === 'lichsu' ||
+        lowerText === 'lich su' ||
+        lowerText === 'lịch sử' ||
+        lowerText === '.ls' ||
+        lowerText === '/ls' ||
+        lowerText.includes('lịch sử hôm nay')
+    );
 
     if (isLsAll || isLsToday) {
         // Yêu cầu: Chỉ áp dụng khi chat 1-1, không hỗ trợ trong nhóm chat
@@ -686,7 +729,8 @@ async function handleLineEvent(event) {
             return;
         }
 
-        const quickReply = lineClient.getQuickReplyMenu();
+        const admin = await isAdmin(userId);
+        const quickReply = lineClient.getQuickReplyMenu(admin);
 
         if (isLsAll) {
             console.log(`[BOT] Tra cứu TOÀN BỘ lịch sử nhận mã cho user: ${userId}`);
@@ -761,7 +805,7 @@ async function handleLineEvent(event) {
     const isHd = lowerText === 'hd' || lowerText === 'hướng dẫn' || lowerText === 'huong dan' || lowerText === '.hd' || lowerText === '/hd';
     if (isHd) {
         const hasAdminPermission = await isAdmin(userId);
-        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu() : null;
+        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu(hasAdminPermission) : null;
         if (hasAdminPermission && isPrivateChat) {
             const guide = [
                 '📖 HƯỚNG DẪN DÀNH CHO ADMIN:',
