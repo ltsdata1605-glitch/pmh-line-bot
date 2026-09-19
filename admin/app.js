@@ -91,6 +91,7 @@ let appState = {
     keywords: [],
     keywordSearch: '',
     settings: { autoApprove: false },
+    dashboardStockPage: 1,
     firebaseConfig: { ...DEFAULT_FIREBASE_CONFIG },
     filter: {
         search: '',
@@ -492,6 +493,8 @@ function renderDashboardStockList() {
     });
 
     if (filteredTypes.length === 0) {
+        const paginationEl = document.getElementById('stock-type-pagination');
+        if (paginationEl) paginationEl.style.display = 'none';
         if (emptyState) {
             emptyState.classList.remove('hidden');
             emptyState.querySelector('p').innerText = 'Không tìm thấy loại PMH nào phù hợp với bộ lọc.';
@@ -501,7 +504,18 @@ function renderDashboardStockList() {
 
     if (emptyState) emptyState.classList.add('hidden');
 
-    filteredTypes.forEach((typeName, index) => {
+    // GIỚI HẠN 10 DÒNG MỖI TRANG & PHÂN TRANG THÔNG MINH
+    const pageSize = 10;
+    const totalPages = Math.ceil(filteredTypes.length / pageSize) || 1;
+    if (!appState.dashboardStockPage || appState.dashboardStockPage < 1) appState.dashboardStockPage = 1;
+    if (appState.dashboardStockPage > totalPages) appState.dashboardStockPage = totalPages;
+
+    const startIndex = (appState.dashboardStockPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, filteredTypes.length);
+    const pagedTypes = filteredTypes.slice(startIndex, endIndex);
+
+    pagedTypes.forEach((typeName, index) => {
+        const rowNumber = startIndex + index + 1;
         const data = typeMap[typeName];
         const isOut = data.unused === 0;
         const isCritical = data.unused > 0 && data.unused < 10;
@@ -537,7 +551,7 @@ function renderDashboardStockList() {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="text-muted" style="font-size: 0.85rem;">${index + 1}</td>
+            <td class="text-muted" style="font-size: 0.85rem;">${rowNumber}</td>
             <td><strong style="font-size: 0.95rem; color: #1E293B;">${typeName}</strong></td>
             <td style="text-align: center;">${unusedBadgeHtml}</td>
             <td style="text-align: center; color: #64748B; font-weight: 600;">${data.sent}</td>
@@ -559,6 +573,46 @@ function renderDashboardStockList() {
         `;
         tbody.appendChild(tr);
     });
+
+    // Render Thanh Phân Trang (Hiển thị 10 dòng/trang)
+    const paginationEl = document.getElementById('stock-type-pagination');
+    const paginationInfo = document.getElementById('stock-type-pagination-info');
+    const paginationButtons = document.getElementById('stock-type-pagination-buttons');
+    if (paginationEl && paginationInfo && paginationButtons) {
+        if (filteredTypes.length > pageSize) {
+            paginationEl.style.display = 'flex';
+            paginationInfo.innerHTML = `Hiển thị <strong>${startIndex + 1} - ${endIndex}</strong> trên tổng số <strong>${filteredTypes.length}</strong> loại PMH`;
+
+            let btnsHtml = `
+                <button class="btn btn-secondary btn-sm" onclick="changeDashboardStockPage(-1)" ${appState.dashboardStockPage <= 1 ? 'disabled style="opacity: 0.45; cursor: not-allowed; padding: 4px 10px; font-size: 0.82rem;"' : 'style="padding: 4px 10px; font-size: 0.82rem;"'}>
+                    <i class="fa-solid fa-chevron-left"></i> Trước
+                </button>
+                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-dark); padding: 0 8px;">
+                    Trang ${appState.dashboardStockPage} / ${totalPages}
+                </span>
+                <button class="btn btn-secondary btn-sm" onclick="changeDashboardStockPage(1)" ${appState.dashboardStockPage >= totalPages ? 'disabled style="opacity: 0.45; cursor: not-allowed; padding: 4px 10px; font-size: 0.82rem;"' : 'style="padding: 4px 10px; font-size: 0.82rem;"'}>
+                    Sau <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            `;
+            paginationButtons.innerHTML = btnsHtml;
+        } else {
+            paginationEl.style.display = 'none';
+        }
+    }
+}
+
+function changeDashboardStockPage(delta) {
+    appState.dashboardStockPage = (appState.dashboardStockPage || 1) + delta;
+    renderDashboardStockList();
+}
+
+function filterDashboardStockType(typeName) {
+    const searchInput = document.getElementById('stock-type-search');
+    if (searchInput) {
+        searchInput.value = typeName;
+    }
+    appState.dashboardStockPage = 1;
+    renderDashboardStockList();
 }
 
 function filterCouponsByType(typeName) {

@@ -221,9 +221,9 @@
                         <div class="header-filters" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                             <div class="search-input-wrapper" style="position: relative; width: 220px;">
                                 <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.85rem;"></i>
-                                <input type="text" id="stock-type-search" placeholder="Tìm loại PMH..." class="form-control" style="padding-left: 34px; height: 38px; font-size: 0.85rem;" oninput="renderDashboardStockList()">
+                                <input type="text" id="stock-type-search" placeholder="Tìm loại PMH..." class="form-control" style="padding-left: 34px; height: 38px; font-size: 0.85rem;" oninput="appState.dashboardStockPage = 1; renderDashboardStockList()">
                             </div>
-                            <select id="stock-type-filter" class="form-control" style="width: 190px; height: 38px; font-size: 0.85rem;" onchange="renderDashboardStockList()">
+                            <select id="stock-type-filter" class="form-control" style="width: 190px; height: 38px; font-size: 0.85rem;" onchange="appState.dashboardStockPage = 1; renderDashboardStockList()">
                                 <option value="ALL">Tất cả trạng thái</option>
                                 <option value="CRITICAL">🔴 Cực thấp (&lt; 10)</option>
                                 <option value="HIGH">🟠 Cần nạp (&lt; 20)</option>
@@ -234,7 +234,7 @@
                         </div>
                     </div>
 
-                    <div class="table-responsive stock-list-table-wrapper" style="max-height: 480px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                    <div class="table-responsive stock-list-table-wrapper" style="border: 1px solid var(--border-color); border-radius: var(--radius-md);">
                         <table class="data-table stock-list-table">
                             <thead>
                                 <tr>
@@ -253,6 +253,17 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Phân trang 10 dòng danh sách tồn kho -->
+                    <div id="stock-type-pagination" style="display: none; justify-content: space-between; align-items: center; margin-top: 14px; padding: 10px 4px 0 4px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 10px;">
+                        <div id="stock-type-pagination-info" style="font-size: 0.85rem; color: var(--text-muted);">
+                            <!-- Rendered by JS -->
+                        </div>
+                        <div id="stock-type-pagination-buttons" style="display: flex; align-items: center; gap: 6px;">
+                            <!-- Rendered by JS -->
+                        </div>
+                    </div>
+
                     <div id="stock-type-empty-state" class="empty-state hidden" style="padding: 30px;">
                         <i class="fa-solid fa-box-open" style="font-size: 2rem; color: var(--text-muted); margin-bottom: 8px;"></i>
                         <p class="text-muted">Không tìm thấy loại PMH nào phù hợp với bộ lọc.</p>
