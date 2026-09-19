@@ -245,8 +245,22 @@ const couponService = {
         const normMdh = cleanMdh(mdh);
         if (!normMdh) return { action: 'allow' };
 
-        // 1. Kiểm tra trong danh sách requests (ưu tiên đơn gần nhất)
+        // 1. Kiểm tra xem đơn MĐH này có đang nằm trong hàng đợi chờ duyệt không
         const requests = await Firebase.getRequests();
+        const pendingReq = requests.slice().reverse().find(r => {
+            const rMdh = cleanMdh(r.mdh);
+            const isPending = r.status === CONFIG.REQUEST_STATUS_PENDING || r.status === 'PENDING' || r.status === 'Chờ duyệt đơn';
+            return rMdh === normMdh && isPending;
+        });
+
+        if (pendingReq) {
+            return {
+                action: 'already_pending',
+                existing: pendingReq
+            };
+        }
+
+        // 2. Kiểm tra trong danh sách requests đã phát mã (ưu tiên đơn gần nhất)
         const duplicateReq = requests.slice().reverse().find(r => {
             const rMdh = cleanMdh(r.mdh);
             const isSent = r.status === CONFIG.REQUEST_STATUS_SENT || r.status === 'SENT' || r.status === 'Đã phát mã';

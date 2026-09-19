@@ -951,6 +951,16 @@ async function handleCouponRequest(payload) {
     let oldTime = '';
     let oldRecipient = '';
 
+    if (dupCheck.action === 'already_pending') {
+        const pendingMsg =
+            `⚠️ ĐƠN HÀNG ĐANG CHỜ DUYỆT!\n` +
+            `━━━━━━━━━━━━━━━━━━━━━\n` +
+            `MĐH "${data.mdh}" (${data.loaiPMH}) hiện đã được tiếp nhận và đang nằm trong danh sách chờ Admin duyệt.\n` +
+            `👉 Quản lý vui lòng không gửi lại để tránh trùng lặp! Admin sẽ duyệt sớm nhất.`;
+        await lineClient.replyText(payload.replyToken, pendingMsg, payload.quoteToken);
+        return;
+    }
+
     if (dupCheck.action === 'revoke_and_reissue' && dupCheck.existing) {
         isReplaced = true;
         oldCode = dupCheck.existing.couponCode || '';
@@ -1019,7 +1029,8 @@ async function handleCouponRequest(payload) {
 
     // Lấy cài đặt hệ thống xem có bật tự động phát không
     const settings = await Firebase.getSettings();
-    const isAutoApprove = !!settings.autoApprove;
+    // QUAN TRỌNG: Nếu đơn gửi trùng MĐH (isReplaced), BẮT BUỘC TẠM GIỮ chờ Admin duyệt (không bao giờ tự động phát mã!)
+    const isAutoApprove = !!settings.autoApprove && !isReplaced;
 
     const couponId = coupon.index !== undefined ? coupon.index : coupon.key;
 
@@ -1150,11 +1161,16 @@ async function handleCouponRequest(payload) {
         });
 
         // Phản hồi đã tiếp nhận và đính kèm CẢNH BÁO TRÙNG MĐH nếu có
-        let pendingMsg = `⏳ Đã nhận yêu cầu PMH ${data.loaiPMH} (MĐH: ${data.mdh || '-'}). Đang chờ Admin duyệt...`;
+        let pendingMsg = '';
         if (isReplaced && oldCode) {
-            pendingMsg += `${NL}━━━━━━━━━━━━━━━━━━━━━${NL}` +
-                `⚠️ CẢNH BÁO TRÙNG MĐH: Đơn hàng "${data.mdh}" này đã từng được cấp mã "${oldCode}" (${oldType}) lúc ${oldTime} (${oldRecipient}).${NL}` +
-                `👉 Khi Admin duyệt (hoặc gõ "ok"), mã cũ sẽ tự động được THU HỒI vào kho và cấp mã mới!`;
+            pendingMsg =
+                `⚠️ CẢNH BÁO TRÙNG MÃ ĐƠN HÀNG: ${data.mdh}\n` +
+                `━━━━━━━━━━━━━━━━━━━━━\n` +
+                `ℹ️ Đơn hàng này đã từng được cấp mã "${oldCode}" (${oldType}) lúc ${oldTime} (${oldRecipient}).\n` +
+                `⏳ Yêu cầu TẠM GIỮ chờ Admin duyệt!\n` +
+                `👉 Khi Admin duyệt (hoặc gõ "ok"), mã cũ sẽ tự động được THU HỒI vào kho và cấp mã mới cho đơn này.`;
+        } else {
+            pendingMsg = `⏳ Đã nhận yêu cầu PMH ${data.loaiPMH} (MĐH: ${data.mdh || '-'}). Đang chờ Admin duyệt...`;
         }
         await lineClient.replyText(payload.replyToken, pendingMsg, payload.quoteToken);
     }
