@@ -1155,19 +1155,17 @@ async function handleCouponRequest(payload) {
             isReplaced: isReplaced
         });
 
-        // Phản hồi đã tiếp nhận và đính kèm CẢNH BÁO TRÙNG MĐH nếu có
-        let pendingMsg = '';
+        // Nếu là đơn đổi mã do trùng MĐH đã phát trước đó: cảnh báo thu hồi đổi mã
         if (isReplaced && oldCode) {
-            pendingMsg =
+            const pendingMsg =
                 `⚠️ CẢNH BÁO TRÙNG MÃ ĐƠN HÀNG: ${data.mdh}\n` +
                 `━━━━━━━━━━━━━━━━━━━━━\n` +
                 `ℹ️ Đơn hàng này đã từng được cấp mã "${oldCode}" (${oldType}) lúc ${oldTime} (${oldRecipient}).\n` +
                 `⏳ Yêu cầu TẠM GIỮ chờ Admin duyệt!\n` +
                 `👉 Khi Admin duyệt (hoặc gõ "ok"), mã cũ sẽ tự động được THU HỒI vào kho và cấp mã mới cho đơn này.`;
-        } else {
-            pendingMsg = `⏳ Đã nhận yêu cầu PMH ${data.loaiPMH} (MĐH: ${data.mdh || '-'}). Đang chờ Admin duyệt...`;
+            await lineClient.replyText(payload.replyToken, pendingMsg, payload.quoteToken, null, payload.sourceId);
         }
-        await lineClient.replyText(payload.replyToken, pendingMsg, payload.quoteToken, null, payload.sourceId);
+        // Đã tắt phản hồi "Đã nhận yêu cầu... Đang chờ Admin duyệt" đối với đơn mới theo yêu cầu
     }
 }
 
