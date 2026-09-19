@@ -3,7 +3,8 @@ const cors = require('cors');
 const path = require('path');
 const CONFIG = require('./src/config');
 const { handleLineEvent } = require('./src/botHandler');
-const { setupCronJobs } = require('./src/cronJobs');
+const { setupCronJobs, executeSchedule, broadcastMessage } = require('./src/cronJobs');
+const lineClient = require('./src/lineClient');
 const Firebase = require('./src/firebase');
 
 const app = express();
@@ -22,13 +23,67 @@ app.get('/api/health', async (req, res) => {
     const syntax = await Firebase.getSyntax();
     res.json({
         status: 'OK',
-        version: '1.0.7',
+        version: '1.0.8',
         botName: 'DM_Tây Nam Bộ',
         tokenPrefix: CONFIG.CHANNEL_ACCESS_TOKEN.slice(0, 10),
         service: 'PMH LINE BOT & Web Admin',
         firebaseConnected: !!syntax,
         timestamp: new Date().toISOString()
     });
+});
+
+// 2.1 Kích hoạt gửi ngay một lịch hẹn thông báo
+app.post('/api/schedules/trigger/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const schedules = await Firebase.getSchedules();
+        const sched = schedules.find(s => s.id === id);
+        if (!sched) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' });
+        }
+        const result = await executeSchedule(sched);
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 2.2 Phát sóng thông báo nhanh tới nhóm
+app.post('/api/broadcast', async (req, res) => {
+    try {
+        const { text, targets } = req.body;
+        if (!text || !text.trim()) {
+            return res.status(400).json({ success: false, message: 'Nội dung thông báo không được để trống' });
+        }
+        const result = await broadcastMessage(text, targets || 'ALL_GROUPS');
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 2.3 Làm mới thông tin (tên, avatar) của các nhóm đã lưu
+app.post('/api/groups/refresh', async (req, res) => {
+    try {
+        const groups = await Firebase.getGroups();
+        let updatedCount = 0;
+        for (const g of groups) {
+            if (g.groupId && g.groupId.startsWith('C')) {
+                const summary = await lineClient.getGroupSummary(g.groupId);
+                if (summary && summary.groupName) {
+                    await Firebase.saveGroup({
+                        groupId: g.groupId,
+                        groupName: summary.groupName,
+                        pictureUrl: summary.pictureUrl || g.pictureUrl || ''
+                    });
+                    updatedCount++;
+                }
+            }
+        }
+        res.json({ success: true, updatedCount });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 // 3. Webhook GET verification (một số công cụ kiểm tra URL bằng GET)

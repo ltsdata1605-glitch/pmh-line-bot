@@ -274,6 +274,147 @@ const Firebase = {
         } catch (e) {
             // Không ngắt luồng nếu ghi log lỗi
         }
+    },
+
+    /**
+     * ==================== QUẢN LÝ NHÓM LINE (GROUPS) ====================
+     */
+
+    /**
+     * Lấy danh sách các nhóm BOT đang/đã tham gia
+     */
+    async getGroups() {
+        try {
+            const res = await axios.get(`${dbUrl}/groups.json`, { timeout: 5000 });
+            const data = res.data;
+            if (!data) return [];
+            if (Array.isArray(data)) return data.filter(Boolean);
+            return Object.entries(data).map(([id, val]) => ({
+                id,
+                groupId: val.groupId || id,
+                ...val
+            }));
+        } catch (error) {
+            console.error('[Firebase] Lỗi getGroups:', error.message);
+            return [];
+        }
+    },
+
+    /**
+     * Lưu hoặc cập nhật thông tin nhóm
+     */
+    async saveGroup(groupData) {
+        if (!groupData || !groupData.groupId) return null;
+        const groupId = groupData.groupId;
+        try {
+            const payload = {
+                ...groupData,
+                lastActiveAt: new Date().toISOString()
+            };
+            if (!groupData.joinedAt) {
+                payload.joinedAt = new Date().toISOString();
+            }
+            if (payload.active === undefined) {
+                payload.active = true;
+            }
+            await axios.patch(`${dbUrl}/groups/${groupId}.json`, payload, { timeout: 5000 });
+            return groupId;
+        } catch (error) {
+            console.error('[Firebase] Lỗi saveGroup:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * Xóa nhóm khỏi danh sách theo dõi
+     */
+    async deleteGroup(groupId) {
+        try {
+            await axios.delete(`${dbUrl}/groups/${groupId}.json`, { timeout: 5000 });
+            return true;
+        } catch (error) {
+            console.error('[Firebase] Lỗi deleteGroup:', error.message);
+            return false;
+        }
+    },
+
+    /**
+     * ==================== QUẢN LÝ LỊCH HẸN THÔNG BÁO (SCHEDULES) ====================
+     */
+
+    /**
+     * Lấy danh sách tất cả các lịch hẹn thông báo
+     */
+    async getSchedules() {
+        try {
+            const res = await axios.get(`${dbUrl}/schedules.json`, { timeout: 5000 });
+            const data = res.data;
+            if (!data) return [];
+            if (Array.isArray(data)) return data.filter(Boolean);
+            return Object.entries(data).map(([id, val]) => ({
+                id,
+                ...val
+            }));
+        } catch (error) {
+            console.error('[Firebase] Lỗi getSchedules:', error.message);
+            return [];
+        }
+    },
+
+    /**
+     * Lưu lịch hẹn mới hoặc cập nhật toàn bộ lịch hẹn
+     */
+    async saveSchedule(scheduleData) {
+        try {
+            const id = scheduleData.id || ('sched_' + Date.now());
+            const payload = {
+                ...scheduleData,
+                id,
+                updatedAt: new Date().toISOString()
+            };
+            if (!scheduleData.createdAt) {
+                payload.createdAt = new Date().toISOString();
+            }
+            if (payload.active === undefined) {
+                payload.active = true;
+            }
+            await axios.put(`${dbUrl}/schedules/${id}.json`, payload, { timeout: 5000 });
+            return id;
+        } catch (error) {
+            console.error('[Firebase] Lỗi saveSchedule:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * Cập nhật một phần dữ liệu lịch hẹn (trạng thái, thời gian chạy...)
+     */
+    async updateSchedule(scheduleId, data) {
+        if (!scheduleId) return false;
+        try {
+            await axios.patch(`${dbUrl}/schedules/${scheduleId}.json`, {
+                ...data,
+                updatedAt: new Date().toISOString()
+            }, { timeout: 5000 });
+            return true;
+        } catch (error) {
+            console.error('[Firebase] Lỗi updateSchedule:', error.message);
+            return false;
+        }
+    },
+
+    /**
+     * Xóa lịch hẹn khỏi Firebase
+     */
+    async deleteSchedule(scheduleId) {
+        if (!scheduleId) return false;
+        try {
+            await axios.delete(`${dbUrl}/schedules/${scheduleId}.json`, { timeout: 5000 });
+            return true;
+        } catch (error) {
+            console.error('[Firebase] Lỗi deleteSchedule:', error.message);
+            return false;
+        }
     }
 };
 

@@ -86,6 +86,8 @@ let appState = {
     coupons: [],
     syntax: '',
     admins: [],
+    schedules: [],
+    groups: [],
     settings: { autoApprove: false },
     firebaseConfig: { ...DEFAULT_FIREBASE_CONFIG },
     filter: {
@@ -280,6 +282,12 @@ function switchTab(tabId) {
         titleEl.innerText = 'Khai Báo & Quản Lý Admin';
         descEl.innerText = 'Khai báo danh sách các tài khoản LINE có quyền phê duyệt phát mã PMH & cấu hình tự động';
         renderAdminsTable();
+    } else if (tabId === 'schedules') {
+        titleEl.innerText = 'Hẹn Giờ Thông Báo Nhóm';
+        descEl.innerText = 'Cấu hình lịch tự động gửi tin nhắn, báo cáo, thông báo định kỳ đến các nhóm LINE BOT đang tham gia';
+        renderSchedulesTable();
+        renderGroupsList();
+        updateScheduleMetrics();
     }
 }
 
@@ -1173,14 +1181,18 @@ function syncDataFromFirebase(isUserClick = false) {
     const syntaxUrl = getFirebaseEndpoint('/syntax.json');
     const adminsUrl = getFirebaseEndpoint('/admins.json');
     const settingsUrl = getFirebaseEndpoint('/settings.json');
+    const schedulesUrl = getFirebaseEndpoint('/schedules.json');
+    const groupsUrl = getFirebaseEndpoint('/groups.json');
 
     Promise.all([
         fetch(couponsUrl).then(r => r.ok ? r.json() : null),
         fetch(syntaxUrl).then(r => r.ok ? r.json() : null),
         fetch(adminsUrl).then(r => r.ok ? r.json() : null),
-        fetch(settingsUrl).then(r => r.ok ? r.json() : null)
+        fetch(settingsUrl).then(r => r.ok ? r.json() : null),
+        fetch(schedulesUrl).then(r => r.ok ? r.json() : null),
+        fetch(groupsUrl).then(r => r.ok ? r.json() : null)
     ])
-    .then(([fbCoupons, fbSyntax, fbAdmins, fbSettings]) => {
+    .then(([fbCoupons, fbSyntax, fbAdmins, fbSettings, fbSchedules, fbGroups]) => {
         showSyncing(false);
 
         if (fbCoupons && Array.isArray(fbCoupons)) {
@@ -1230,6 +1242,32 @@ function syncDataFromFirebase(isUserClick = false) {
             appState.settings = fbSettings;
             updateApprovalModeUi(!!fbSettings.autoApprove);
         }
+
+        // Xử lý danh sách Lịch Hẹn Thông Báo (Schedules)
+        if (fbSchedules && typeof fbSchedules === 'object') {
+            if (Array.isArray(fbSchedules)) {
+                appState.schedules = fbSchedules.filter(Boolean);
+            } else {
+                appState.schedules = Object.entries(fbSchedules).map(([id, s]) => ({ id, ...s }));
+            }
+        } else {
+            appState.schedules = [];
+        }
+
+        // Xử lý danh sách Nhóm BOT Đang Tham Gia (Groups)
+        if (fbGroups && typeof fbGroups === 'object') {
+            if (Array.isArray(fbGroups)) {
+                appState.groups = fbGroups.filter(Boolean);
+            } else {
+                appState.groups = Object.entries(fbGroups).map(([id, g]) => ({ id, groupId: g.groupId || id, ...g }));
+            }
+        } else {
+            appState.groups = [];
+        }
+
+        renderSchedulesTable();
+        renderGroupsList();
+        updateScheduleMetrics();
 
         if (isUserClick) {
             showToast('Đã đồng bộ dữ liệu mới nhất từ Firebase!', 'success');
@@ -1695,4 +1733,501 @@ function updateApprovalModeUi(autoApprove) {
             autoLabel.style.background = 'transparent';
         }
     }
+}
+
+// ==================== 15. QUẢN LÝ LỊCH HẸN THÔNG BÁO & NHÓM LINE ====================
+function renderSchedulesTable() {
+    const tbody = document.getElementById('schedules-tbody');
+    const badgeCount = document.getElementById('badge-total-schedules');
+    if (!tbody) return;
+
+    const schedules = appState.schedules || [];
+    const activeCount = schedules.filter(s => s.active !== false).length;
+    if (badgeCount) badgeCount.innerText = activeCount;
+
+    tbody.innerHTML = '';
+
+    if (schedules.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-muted" style="text-align: center; padding: 32px 16px;">
+                    <div style="font-size: 1.1rem; margin-bottom: 6px; color: #0F172A; font-weight: 600;">⏰ Chưa có lịch hẹn thông báo nào</div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">Bạn có thể tạo lịch gửi thông báo tự động hàng ngày hoặc gửi một lần tới các nhóm LINE BOT đang tham gia.</div>
+                    <button class="btn btn-primary btn-sm" onclick="openAddScheduleModal()">
+                        <i class="fa-solid fa-plus"></i> Tạo Lịch Hẹn Đầu Tiên
+                    </button>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    schedules.forEach((sched, index) => {
+        const tr = document.createElement('tr');
+        const isActive = sched.active !== false;
+
+        // Chu kỳ
+        let typeBadge = '<span class="status-badge" style="color: #4F46E5; background: #EEF2FF; border: 1px solid #C7D2FE;"><i class="fa-solid fa-repeat"></i> Hàng ngày</span>';
+        if (sched.scheduleType === 'WEEKDAYS') {
+            typeBadge = '<span class="status-badge" style="color: #0284C7; background: #E0F2FE; border: 1px solid #BAE6FD;"><i class="fa-solid fa-business-time"></i> Thứ 2 - Thứ 6</span>';
+        } else if (sched.scheduleType === 'ONCE') {
+            typeBadge = `<span class="status-badge" style="color: #D97706; background: #FEF3C7; border: 1px solid #FDE68A;"><i class="fa-solid fa-calendar-day"></i> Một lần (${sched.date || 'Hôm nay'})</span>`;
+        }
+
+        // Nhóm nhận tin
+        let targetText = '<span style="color: #059669; font-weight: 500;"><i class="fa-solid fa-users"></i> Tất cả nhóm</span>';
+        if (Array.isArray(sched.target)) {
+            targetText = `<span style="color: #4F46E5; font-weight: 500;"><i class="fa-solid fa-layer-group"></i> ${sched.target.length} nhóm đã chọn</span>`;
+        }
+
+        // Trạng thái chạy cuối
+        let lastRunText = 'Chưa chạy';
+        if (sched.lastRunAt) {
+            lastRunText = formatDate(sched.lastRunAt);
+            if (sched.lastStatus === 'SUCCESS') {
+                lastRunText += ' <span style="color: #16A34A;">(Thành công)</span>';
+            } else if (sched.lastStatus) {
+                lastRunText += ` <span style="color: #DC2626;">(${sched.lastStatus})</span>`;
+            }
+        }
+
+        const cleanContent = escapeHtml(sched.content || '');
+        const snippet = cleanContent.length > 55 ? cleanContent.slice(0, 55) + '...' : cleanContent;
+
+        tr.innerHTML = `
+            <td class="text-muted">${index + 1}</td>
+            <td>
+                <strong style="color: #0F172A; font-size: 0.92rem;">${escapeHtml(sched.title || 'Thông báo')}</strong>
+                ${sched.createdBy ? `<div style="font-size: 0.76rem; color: #64748B;">Tạo bởi: ${escapeHtml(sched.createdBy)}</div>` : ''}
+            </td>
+            <td>
+                <div style="font-size: 0.85rem; color: #334155; max-width: 280px; white-space: pre-wrap; line-height: 1.3;" title="${cleanContent}">${snippet}</div>
+            </td>
+            <td>
+                <div style="font-size: 0.95rem; font-weight: 700; color: #0F172A; margin-bottom: 4px; font-family: monospace;">
+                    <i class="fa-regular fa-clock" style="color: #4F46E5;"></i> ${sched.time || '--:--'}
+                </div>
+                ${typeBadge}
+            </td>
+            <td>${targetText}</td>
+            <td>
+                <span class="status-badge" style="color: ${isActive ? '#16A34A' : '#64748B'}; background: ${isActive ? '#F0FDF4' : '#F1F5F9'}; border: 1px solid ${isActive ? '#BBF7D0' : '#E2E8F0'};">
+                    <i class="fa-solid ${isActive ? 'fa-circle-check' : 'fa-circle-pause'}"></i>
+                    ${isActive ? 'Đang bật' : 'Tạm tắt'}
+                </span>
+            </td>
+            <td style="font-size: 0.82rem; color: #64748B;">
+                ${lastRunText}
+            </td>
+            <td class="text-right">
+                <div class="table-actions">
+                    <button class="btn-icon" title="Gửi thử ngay tới nhóm" onclick="triggerScheduleNow('${sched.id}')" style="color: #D97706;">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                    <button class="btn-icon" title="${isActive ? 'Tạm tắt lịch hẹn' : 'Kích hoạt lịch hẹn'}" onclick="toggleScheduleStatus('${sched.id}')" style="color: ${isActive ? '#16A34A' : '#64748B'};">
+                        <i class="fa-solid ${isActive ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
+                    </button>
+                    <button class="btn-icon" title="Chỉnh sửa lịch hẹn" onclick="openAddScheduleModal('${sched.id}')">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button class="btn-icon danger" title="Xóa lịch hẹn này" onclick="deleteSchedulePrompt('${sched.id}')">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderGroupsList() {
+    const tbody = document.getElementById('groups-tbody');
+    if (!tbody) return;
+
+    const groups = appState.groups || [];
+    tbody.innerHTML = '';
+
+    if (groups.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-muted" style="text-align: center; padding: 24px;">
+                    Chưa ghi nhận nhóm nào. Khi BOT được mời vào nhóm LINE hoặc có tin nhắn trong nhóm, BOT sẽ tự động lưu thông tin nhóm tại đây.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    groups.forEach((grp, idx) => {
+        const tr = document.createElement('tr');
+        const isActive = grp.active !== false;
+
+        tr.innerHTML = `
+            <td class="text-muted">${idx + 1}</td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    ${grp.pictureUrl ? `<img src="${grp.pictureUrl}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">` : '<i class="fa-solid fa-users" style="color: #4F46E5;"></i>'}
+                    <strong style="color: #0F172A; font-size: 0.88rem;">${escapeHtml(grp.groupName || 'Nhóm LINE')}</strong>
+                </div>
+            </td>
+            <td>
+                <span class="coupon-code-pill" style="font-family: monospace; font-size: 0.78rem;">${grp.groupId || grp.id}</span>
+            </td>
+            <td>
+                <span class="status-badge" style="color: ${isActive ? '#16A34A' : '#DC2626'}; font-size: 0.78rem;">
+                    <i class="fa-solid ${isActive ? 'fa-circle-check' : 'fa-circle-xmark'}"></i>
+                    ${isActive ? 'Đang kết nối' : 'Đã rời'}
+                </span>
+            </td>
+            <td style="font-size: 0.8rem; color: #64748B;">
+                ${grp.lastActiveAt ? formatDate(grp.lastActiveAt) : '-'}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function updateScheduleMetrics() {
+    const groups = appState.groups || [];
+    const schedules = appState.schedules || [];
+
+    const activeGroupsCount = groups.filter(g => g.active !== false).length;
+    const activeSchedulesCount = schedules.filter(s => s.active !== false).length;
+
+    const elTotalGroups = document.getElementById('stat-total-groups');
+    const elActiveSchedules = document.getElementById('stat-active-schedules');
+    const elTotalSchedulesSub = document.getElementById('stat-total-schedules-sub');
+    const elLastTime = document.getElementById('stat-last-broadcast-time');
+    const elLastTitle = document.getElementById('stat-last-broadcast-title');
+
+    if (elTotalGroups) elTotalGroups.innerText = activeGroupsCount;
+    if (elActiveSchedules) elActiveSchedules.innerText = activeSchedulesCount;
+    if (elTotalSchedulesSub) elTotalSchedulesSub.innerText = schedules.length;
+
+    // Tìm lịch chạy gần nhất
+    const ranSchedules = schedules.filter(s => s.lastRunAt).sort((a, b) => new Date(b.lastRunAt) - new Date(a.lastRunAt));
+    if (ranSchedules.length > 0 && elLastTime && elLastTitle) {
+        const latest = ranSchedules[0];
+        elLastTime.innerText = formatDate(latest.lastRunAt);
+        elLastTitle.innerText = `"${latest.title || 'Thông báo'}" (${latest.lastSentCount || 0} nhóm)`;
+    } else if (elLastTime && elLastTitle) {
+        elLastTime.innerText = 'Chưa phát';
+        elLastTitle.innerText = '-';
+    }
+}
+
+function openAddScheduleModal(editId = null) {
+    const modal = document.getElementById('modal-schedule');
+    const titleEl = document.getElementById('modal-schedule-title');
+    const idInput = document.getElementById('schedule-edit-id');
+    const titleInput = document.getElementById('schedule-title');
+    const contentInput = document.getElementById('schedule-content');
+    const typeInput = document.getElementById('schedule-type');
+    const timeInput = document.getElementById('schedule-time');
+    const dateInput = document.getElementById('schedule-date');
+    const activeInput = document.getElementById('schedule-active');
+
+    // Populate group checkboxes
+    populateGroupCheckboxes('custom-groups-checkboxes', []);
+
+    if (editId) {
+        const target = appState.schedules.find(s => s.id === editId);
+        if (target) {
+            titleEl.innerText = 'Chỉnh Sửa Lịch Hẹn Thông Báo';
+            idInput.value = target.id;
+            titleInput.value = target.title || '';
+            contentInput.value = target.content || '';
+            typeInput.value = target.scheduleType || 'DAILY';
+            timeInput.value = target.time || '08:00';
+            dateInput.value = target.date || '';
+            activeInput.checked = target.active !== false;
+
+            if (Array.isArray(target.target)) {
+                document.getElementById('target-type-custom').checked = true;
+                toggleCustomGroupSelection(true);
+                populateGroupCheckboxes('custom-groups-checkboxes', target.target);
+            } else {
+                document.getElementById('target-type-all').checked = true;
+                toggleCustomGroupSelection(false);
+            }
+        }
+    } else {
+        titleEl.innerText = 'Tạo Lịch Hẹn Giờ Thông Báo';
+        idInput.value = '';
+        titleInput.value = '';
+        contentInput.value = '';
+        typeInput.value = 'DAILY';
+        timeInput.value = '08:00';
+        dateInput.value = new Date().toISOString().slice(0, 10);
+        activeInput.checked = true;
+
+        document.getElementById('target-type-all').checked = true;
+        toggleCustomGroupSelection(false);
+    }
+
+    handleScheduleTypeChange();
+    modal.classList.remove('hidden');
+}
+
+function closeScheduleModal() {
+    const modal = document.getElementById('modal-schedule');
+    if (modal) modal.classList.add('hidden');
+}
+
+function handleScheduleTypeChange() {
+    const type = document.getElementById('schedule-type').value;
+    const dateGroup = document.getElementById('group-schedule-date');
+    if (dateGroup) {
+        if (type === 'ONCE') {
+            dateGroup.classList.remove('hidden');
+        } else {
+            dateGroup.classList.add('hidden');
+        }
+    }
+}
+
+function toggleCustomGroupSelection(isCustom) {
+    const container = document.getElementById('custom-groups-container');
+    if (container) {
+        if (isCustom) container.classList.remove('hidden');
+        else container.classList.add('hidden');
+    }
+}
+
+function populateGroupCheckboxes(containerId, selectedIds = []) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const groups = (appState.groups || []).filter(g => g.active !== false);
+    if (groups.length === 0) {
+        container.innerHTML = '<div style="font-size: 0.82rem; color: var(--text-muted); padding: 4px;">Chưa có nhóm nào được kết nối. Khi bot vào nhóm sẽ tự hiện ở đây.</div>';
+        return;
+    }
+
+    container.innerHTML = groups.map(g => `
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer; padding: 3px 0;">
+            <input type="checkbox" value="${g.groupId}" ${selectedIds.includes(g.groupId) ? 'checked' : ''} style="accent-color: #4F46E5;">
+            <span><strong>${escapeHtml(g.groupName || 'Nhóm')}</strong> <span style="color:#64748B; font-family:monospace; font-size:0.75rem;">(${g.groupId})</span></span>
+        </label>
+    `).join('');
+}
+
+function handleSaveSchedule(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('schedule-edit-id').value;
+    const title = document.getElementById('schedule-title').value.trim();
+    const content = document.getElementById('schedule-content').value.trim();
+    const scheduleType = document.getElementById('schedule-type').value;
+    const time = document.getElementById('schedule-time').value.trim();
+    const date = document.getElementById('schedule-date').value;
+    const active = document.getElementById('schedule-active').checked;
+    const isCustomTarget = document.getElementById('target-type-custom').checked;
+
+    let target = 'ALL_GROUPS';
+    if (isCustomTarget) {
+        const checkedBoxes = document.querySelectorAll('#custom-groups-checkboxes input[type="checkbox"]:checked');
+        const selected = Array.from(checkedBoxes).map(cb => cb.value);
+        if (selected.length === 0) {
+            showToast('Vui lòng tích chọn ít nhất 1 nhóm hoặc chọn "Tất cả nhóm"!', 'warning');
+            return;
+        }
+        target = selected;
+    }
+
+    const schedId = id || ('sched_' + Date.now());
+    const schedObj = {
+        id: schedId,
+        title,
+        content,
+        scheduleType,
+        time,
+        date: scheduleType === 'ONCE' ? date : '',
+        target,
+        active,
+        updatedAt: new Date().toISOString()
+    };
+
+    const existingIdx = appState.schedules.findIndex(s => s.id === schedId);
+    if (existingIdx !== -1) {
+        appState.schedules[existingIdx] = { ...appState.schedules[existingIdx], ...schedObj };
+    } else {
+        schedObj.createdAt = new Date().toISOString();
+        appState.schedules.push(schedObj);
+    }
+
+    renderSchedulesTable();
+    updateScheduleMetrics();
+    closeScheduleModal();
+    showToast('Đang lưu lịch hẹn lên Firebase...', 'info');
+
+    const url = getFirebaseEndpoint(`/schedules/${schedId}.json`);
+    fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(schedObj)
+    })
+    .then(() => {
+        showToast(`Đã lưu lịch hẹn "${title}" thành công!`, 'success');
+    })
+    .catch(err => {
+        console.error('Lỗi lưu schedule:', err);
+        showToast('Lỗi khi lưu lên Firebase!', 'error');
+    });
+}
+
+function toggleScheduleStatus(schedId) {
+    const target = appState.schedules.find(s => s.id === schedId);
+    if (!target) return;
+
+    target.active = !(target.active !== false);
+    renderSchedulesTable();
+    updateScheduleMetrics();
+
+    const url = getFirebaseEndpoint(`/schedules/${schedId}.json`);
+    fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: target.active, updatedAt: new Date().toISOString() })
+    })
+    .then(() => {
+        showToast(`Đã ${target.active ? 'bật' : 'tắt'} lịch hẹn "${target.title}"!`, 'success');
+    })
+    .catch(err => console.error(err));
+}
+
+function deleteSchedulePrompt(schedId) {
+    const target = appState.schedules.find(s => s.id === schedId);
+    if (!target) return;
+
+    if (confirm(`Bạn có chắc chắn muốn xóa lịch hẹn "${target.title}" không?`)) {
+        appState.schedules = appState.schedules.filter(s => s.id !== schedId);
+        renderSchedulesTable();
+        updateScheduleMetrics();
+
+        const url = getFirebaseEndpoint(`/schedules/${schedId}.json`);
+        fetch(url, { method: 'DELETE' })
+        .then(() => {
+            showToast(`Đã xóa lịch hẹn "${target.title}"!`, 'success');
+        })
+        .catch(err => console.error(err));
+    }
+}
+
+function triggerScheduleNow(schedId) {
+    const target = appState.schedules.find(s => s.id === schedId);
+    if (!target) return;
+
+    if (!confirm(`Bạn có chắc muốn gửi ngay thông báo của lịch "${target.title}" tới các nhóm không?`)) return;
+
+    showToast(`Đang gửi thông báo "${target.title}" tới các nhóm...`, 'info');
+
+    fetch(`/api/schedules/trigger/${schedId}`, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast(`🚀 Đã gửi thông báo thành công đến ${data.sentCount}/${data.total} nhóm!`, 'success');
+            syncDataFromFirebase(false);
+        } else {
+            showToast(`Không thể gửi: ${data.message || data.reason || 'Lỗi không xác định'}`, 'error');
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        showToast('Lỗi khi gửi thông báo: ' + err.message, 'error');
+    });
+}
+
+function openBroadcastModal() {
+    const modal = document.getElementById('modal-broadcast');
+    const contentInput = document.getElementById('broadcast-content');
+    contentInput.value = '';
+    document.getElementById('broadcast-target-all').checked = true;
+    toggleBroadcastCustomGroups(false);
+    populateGroupCheckboxes('broadcast-groups-checkboxes', []);
+    modal.classList.remove('hidden');
+}
+
+function closeBroadcastModal() {
+    const modal = document.getElementById('modal-broadcast');
+    if (modal) modal.classList.add('hidden');
+}
+
+function toggleBroadcastCustomGroups(isCustom) {
+    const container = document.getElementById('broadcast-groups-container');
+    if (container) {
+        if (isCustom) container.classList.remove('hidden');
+        else container.classList.add('hidden');
+    }
+}
+
+function handleSendBroadcast(e) {
+    e.preventDefault();
+    const content = document.getElementById('broadcast-content').value.trim();
+    if (!content) {
+        showToast('Vui lòng nhập nội dung thông báo!', 'warning');
+        return;
+    }
+
+    const isCustom = document.getElementById('broadcast-target-custom').checked;
+    let targets = 'ALL_GROUPS';
+    if (isCustom) {
+        const checkedBoxes = document.querySelectorAll('#broadcast-groups-checkboxes input[type="checkbox"]:checked');
+        const selected = Array.from(checkedBoxes).map(cb => cb.value);
+        if (selected.length === 0) {
+            showToast('Vui lòng chọn ít nhất 1 nhóm để gửi!', 'warning');
+            return;
+        }
+        targets = selected;
+    }
+
+    closeBroadcastModal();
+    showToast('Đang phát sóng thông báo tới các nhóm...', 'info');
+
+    fetch('/api/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: content, targets })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast(`🚀 Đã phát sóng thành công đến ${data.sentCount}/${data.total} nhóm!`, 'success');
+            syncDataFromFirebase(false);
+        } else {
+            showToast(`Không thể phát sóng: ${data.message || 'Lỗi không xác định'}`, 'error');
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        showToast('Lỗi gửi broadcast: ' + err.message, 'error');
+    });
+}
+
+function refreshGroupsInfo() {
+    showToast('Đang làm mới thông tin và avatar các nhóm từ LINE API...', 'info');
+    fetch('/api/groups/refresh', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast(`Đã làm mới thông tin ${data.updatedCount} nhóm thành công!`, 'success');
+            syncDataFromFirebase(false);
+        } else {
+            showToast('Không thể làm mới: ' + data.error, 'error');
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        showToast('Lỗi làm mới: ' + err.message, 'error');
+    });
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }

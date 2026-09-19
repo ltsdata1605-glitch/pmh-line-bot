@@ -19,6 +19,37 @@ setInterval(() => {
     }
 }, 15 * 60 * 1000);
 
+// Bộ nhớ cache theo dõi nhóm (tránh query liên tục)
+const trackedGroups = new Map();
+
+async function trackGroupInfo(groupId) {
+    if (!groupId || !groupId.startsWith('C')) return;
+    const lastTracked = trackedGroups.get(groupId);
+    const now = Date.now();
+    if (lastTracked && (now - lastTracked < 30 * 60 * 1000)) {
+        return;
+    }
+    trackedGroups.set(groupId, now);
+
+    try {
+        const summary = await lineClient.getGroupSummary(groupId);
+        const groupName = summary?.groupName || 'Nhóm LINE';
+        const pictureUrl = summary?.pictureUrl || '';
+        await Firebase.saveGroup({
+            groupId,
+            groupName,
+            pictureUrl,
+            active: true
+        });
+    } catch (e) {
+        await Firebase.saveGroup({
+            groupId,
+            groupName: 'Nhóm LINE',
+            active: true
+        });
+    }
+}
+
 async function isAdmin(userId) {
     if (!userId) return false;
     if (CONFIG.ADMIN_IDS.includes(userId)) return true;
@@ -43,6 +74,11 @@ async function handleLineEvent(event) {
 
     // Khi bot được mời vào nhóm (Join event)
     if (event.type === 'join') {
+        const groupId = event.source?.groupId;
+        if (groupId) {
+            trackGroupInfo(groupId).catch(() => {});
+        }
+
         const welcome = [
             '👋 Xin chào mọi người! Em là BOT PMH ICT.',
             '------------------------',
@@ -52,6 +88,15 @@ async function handleLineEvent(event) {
             '• "admin": Khai báo quản trị viên duyệt mã'
         ].join(NL);
         await lineClient.replyText(event.replyToken, welcome);
+        return;
+    }
+
+    // Khi bot bị xóa hoặc rời nhóm (Leave event)
+    if (event.type === 'leave') {
+        const groupId = event.source?.groupId;
+        if (groupId) {
+            await Firebase.saveGroup({ groupId, active: false });
+        }
         return;
     }
 
@@ -70,6 +115,11 @@ async function handleLineEvent(event) {
     if (!text) return;
 
     console.log(`[BOT RECV] text: "${text}" | userId: "${userId || 'ẨN'}" | source: ${event.source ? event.source.type : 'N/A'} (ID: ${sourceId})`);
+
+    // Tự động nhận diện và cập nhật thông tin nhóm
+    if (event.source?.groupId) {
+        trackGroupInfo(event.source.groupId).catch(() => {});
+    }
 
     // Đánh dấu đã xem (mark as read)
     if (event.message.markAsReadToken && sourceId) {
@@ -133,6 +183,110 @@ async function handleLineEvent(event) {
         return;
     }
 
+    // 1.6 Lệnh Xem Danh Sách Nhóm (dsnhom)
+    if (lowerText === 'dsnhom' || lowerText === 'ds nhóm' || lowerText === 'danh sách nhóm') {
+        const hasAdminPermission = await isAdmin(userId);
+        if (hasAdminPermission) {
+            const groups = await Firebase.getGroups();
+            const activeGroups = groups.filter(g => g.active !== false);
+            if (activeGroups.length === 0) {
+                await lineClient.replyText(replyToken, 'ℹ️ Bot chưa ghi nhận nhóm chat nào. Hãy mời Bot vào nhóm và nhắn bất kỳ tin gì để Bot tự lưu nhóm nhé!', quoteToken);
+            } else {
+                const lines = activeGroups.map((g, idx) => `${idx + 1}. 👥 ${g.groupName || 'Nhóm LINE'}\n   (ID: ${g.groupId})`);
+                const msg = `👥 DANH SÁCH NHÓM BOT ĐÃ THAM GIA (${activeGroups.length} nhóm):\n------------------------\n${lines.join('\n')}\n------------------------\n💡 Bot có thể gửi thông báo hẹn giờ đến tất cả nhóm này.`;
+                await lineClient.replyText(replyToken, msg, quoteToken);
+            }
+            return;
+        }
+    }
+
+    // 1.7 Lệnh Xem Danh Sách Lịch Hẹn (dslich)
+    if (lowerText === 'dslich' || lowerText === 'ds lịch' || lowerText === 'danh sách lịch') {
+        const hasAdminPermission = await isAdmin(userId);
+        if (hasAdminPermission) {
+            const schedules = await Firebase.getSchedules();
+            if (schedules.length === 0) {
+                await lineClient.replyText(replyToken, 'ℹ️ Chưa có lịch hẹn thông báo nào. Bạn có thể tạo tại Web Quản Trị hoặc nhắn cú pháp:\nhengio [HH:mm] [Nội dung...]', quoteToken);
+            } else {
+                const lines = schedules.map((s, idx) => {
+                    const statusIcon = s.active !== false ? '🟢' : '⚪';
+                    const timeStr = s.scheduleType === 'ONCE' ? `${s.time} (${s.date})` : `${s.time} (${s.scheduleType || 'DAILY'})`;
+                    const snippet = s.content && s.content.length > 40 ? s.content.slice(0, 40) + '...' : (s.content || '');
+                    return `${idx + 1}. [${statusIcon}] ${s.title || 'Thông báo'}\n   ⏰ ${timeStr}\n   📝 "${snippet}"`;
+                });
+                const msg = `⏰ DANH SÁCH LỊCH HẸN THÔNG BÁO (${schedules.length} lịch):\n------------------------\n${lines.join('\n')}\n------------------------\n💡 Quản lý bật/tắt hoặc chỉnh sửa tại Web Quản Trị: https://pmh-line-bot.onrender.com`;
+                await lineClient.replyText(replyToken, msg, quoteToken);
+            }
+            return;
+        }
+    }
+
+    // 1.8 Lệnh Tạo Nhanh Lịch Hẹn Giờ (hengio HH:mm <nội dung>)
+    const hengioMatch = text.match(/^hengio\s+(\d{1,2}[:hH]\d{2})\s+([\s\S]+)$/i);
+    if (hengioMatch) {
+        const hasAdminPermission = await isAdmin(userId);
+        if (hasAdminPermission) {
+            const rawTime = hengioMatch[1].replace(/[hH]/, ':');
+            const parts = rawTime.split(':');
+            const hh = parts[0].padStart(2, '0');
+            const mm = parts[1].padStart(2, '0');
+            const formattedTime = `${hh}:${mm}`;
+            const content = hengioMatch[2].trim();
+            const displayName = await lineClient.getDisplayName(userId);
+
+            const schedId = 'sched_' + Date.now();
+            await Firebase.saveSchedule({
+                id: schedId,
+                title: `Thông báo lúc ${formattedTime}`,
+                content: content,
+                scheduleType: 'DAILY',
+                time: formattedTime,
+                target: 'ALL_GROUPS',
+                active: true,
+                createdBy: displayName || 'Admin LINE'
+            });
+
+            const msg = `⏰ ĐÃ THIẾT LẬP LỊCH HẸN THÀNH CÔNG!\n------------------------\n` +
+                `• Giờ gửi: ${formattedTime} (Hàng ngày)\n` +
+                `• Đối tượng: Tất cả nhóm BOT đang tham gia\n` +
+                `• Nội dung: "${content}"\n` +
+                `• Trạng thái: Đang bật 🟢\n` +
+                `------------------------\n` +
+                `💡 Quản lý hoặc tùy chỉnh nâng cao tại Web Quản Trị: https://pmh-line-bot.onrender.com`;
+            await lineClient.replyText(replyToken, msg, quoteToken);
+            return;
+        }
+    }
+
+    // 1.9 Lệnh Phát Sóng Tức Thì (thongbao <nội dung>)
+    const thongbaoMatch = text.match(/^thongbao\s+([\s\S]+)$/i);
+    if (thongbaoMatch) {
+        const hasAdminPermission = await isAdmin(userId);
+        if (hasAdminPermission) {
+            const content = thongbaoMatch[1].trim();
+            const groups = await Firebase.getGroups();
+            const activeGroups = groups.filter(g => g.active !== false);
+
+            if (activeGroups.length === 0) {
+                await lineClient.replyText(replyToken, '❌ Bot chưa ghi nhận nhóm nào để gửi thông báo.', quoteToken);
+                return;
+            }
+
+            await lineClient.replyText(replyToken, `🚀 Đang phát thông báo tới ${activeGroups.length} nhóm chat...`, quoteToken);
+
+            let sentCount = 0;
+            const fullMsg = `📢 THÔNG BÁO TỪ QUẢN TRỊ VIÊN:\n------------------------\n${content}`;
+            for (const g of activeGroups) {
+                const res = await lineClient.pushText(g.groupId, fullMsg);
+                if (res) sentCount++;
+                await new Promise(r => setTimeout(r, 200));
+            }
+
+            await lineClient.pushText(sourceId, `✅ Đã gửi thông báo thành công đến ${sentCount}/${activeGroups.length} nhóm!`);
+            return;
+        }
+    }
+
     // 2. Lệnh Cú Pháp (cp / cú pháp)
     const isCp = lowerText === 'cp' || lowerText.startsWith('cp ') || lowerText === 'cú pháp' || lowerText === 'cu phap' || lowerText === '.cp' || lowerText === '/cp';
     if (isCp) {
@@ -164,8 +318,12 @@ async function handleLineEvent(event) {
                 '📖 HƯỚNG DẪN DÀNH CHO ADMIN:',
                 '------------------------',
                 '• "DUYỆT" hoặc "OK": Duyệt cấp mã cho các yêu cầu đang chờ.',
-                '• "auto on": Bật tính năng tự động cấp mã tức thì không cần duyệt.',
-                '• "auto off": Tắt tự động, chuyển sang duyệt thủ công.',
+                '• "auto on": Bật tự động cấp mã tức thì.',
+                '• "auto off": Tắt tự động, chuyển duyệt thủ công.',
+                '• "dsnhom": Xem danh sách nhóm bot đã tham gia.',
+                '• "dslich": Xem danh sách các lịch thông báo.',
+                '• "hengio [HH:mm] [Nội dung]": Đặt lịch thông báo hàng ngày.',
+                '• "thongbao [Nội dung]": Phát sóng tức thì tới tất cả nhóm.',
                 '• "tk": Xem thống kê tồn kho các loại PMH.',
                 '• "cp": Xem cú pháp đăng ký hiện tại.'
             ].join(NL);

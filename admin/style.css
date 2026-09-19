@@ -1817,3 +1817,21 @@ code {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.8rem;
 }
+
+/* ==================== SCHEDULES & ANNOUNCEMENT UI ==================== */
+.dashboard-grid-dual {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 24px;
+}
+
+@media (max-width: 1024px) {
+    .dashboard-grid-dual {
+        grid-template-columns: 1fr;
+    }
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.82rem;
+}

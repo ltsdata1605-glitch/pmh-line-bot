@@ -105,6 +105,11 @@
                     <span>Khai Báo Admin</span>
                     <span class="badge badge-stock" id="badge-total-admins" style="background: #EEF2FF; color: #4F46E5; border-color: #C7D2FE;">1</span>
                 </button>
+                <button class="nav-item" data-tab="schedules" onclick="switchTab('schedules')">
+                    <i class="fa-solid fa-clock"></i>
+                    <span>Hẹn Giờ Thông Báo</span>
+                    <span class="badge badge-stock" id="badge-total-schedules" style="background: #ECFDF5; color: #059669; border-color: #A7F3D0;">0</span>
+                </button>
             </nav>
 
             <div class="sidebar-footer">
@@ -541,6 +546,156 @@
                     </div>
                 </div>
             </section>
+
+            <!-- ==================== TAB 5: HẸN GIỜ THÔNG BÁO (SCHEDULES) ==================== -->
+            <section id="tab-schedules" class="tab-pane">
+                <!-- Thẻ thống kê tổng quan -->
+                <div class="metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-bottom: 24px;">
+                    <div class="metric-card" style="border-left: 4px solid #10B981;">
+                        <div class="metric-icon" style="background: #ECFDF5; color: #059669;">
+                            <i class="fa-solid fa-users-viewfinder"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">Nhóm BOT Tham Gia</div>
+                            <div class="metric-value" id="stat-total-groups">0</div>
+                            <div class="metric-hint" style="color: #059669;"><i class="fa-solid fa-circle-check"></i> Đang tự động kết nối</div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card" style="border-left: 4px solid #4F46E5;">
+                        <div class="metric-icon" style="background: #EEF2FF; color: #4F46E5;">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">Lịch Hẹn Đang Bật</div>
+                            <div class="metric-value" id="stat-active-schedules">0</div>
+                            <div class="metric-hint"><span id="stat-total-schedules-sub">0</span> lịch tổng cộng</div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card" style="border-left: 4px solid #F59E0B;">
+                        <div class="metric-icon" style="background: #FFFBEB; color: #D97706;">
+                            <i class="fa-solid fa-bullhorn"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">Lần Phát Gần Nhất</div>
+                            <div class="metric-value" style="font-size: 1.05rem; line-height: 1.4;" id="stat-last-broadcast-time">Chưa phát</div>
+                            <div class="metric-hint" id="stat-last-broadcast-title">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bảng Danh Sách Lịch Hẹn Thông Báo -->
+                <div class="content-section" style="margin-bottom: 24px;">
+                    <div class="section-header">
+                        <div>
+                            <h2>Danh Sách Lịch Hẹn Giờ Gửi Thông Báo</h2>
+                            <p>Tự động gửi tin nhắn, thông báo, báo cáo đến các nhóm LINE BOT đang tham gia (Múi giờ Việt Nam UTC+7)</p>
+                        </div>
+                        <div class="section-actions">
+                            <button class="btn btn-outline" onclick="openBroadcastModal()">
+                                <i class="fa-solid fa-paper-plane"></i>
+                                <span>Gửi Thông Báo Nhanh</span>
+                            </button>
+                            <button class="btn btn-primary" onclick="openAddScheduleModal()">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Tạo Lịch Hẹn Mới</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th width="50">STT</th>
+                                    <th>Tiêu Đề Lịch</th>
+                                    <th>Nội Dung Thông Báo</th>
+                                    <th>Giờ Gửi & Chu Kỳ</th>
+                                    <th>Nhóm Nhận Tin</th>
+                                    <th>Trạng Thái</th>
+                                    <th>Lần Chạy Cuối</th>
+                                    <th class="text-right">Thao Tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="schedules-tbody">
+                                <!-- Rendered dynamically by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Grid 2 Cột: Nhóm Tham Gia & Lệnh LINE Bot -->
+                <div class="dashboard-grid-dual">
+                    <!-- Danh Sách Nhóm BOT Tham Gia -->
+                    <div class="content-section" style="margin-bottom: 0;">
+                        <div class="section-header">
+                            <div>
+                                <h2>Nhóm LINE BOT Đang Tham Gia</h2>
+                                <p>Tự động cập nhật khi BOT được mời vào nhóm hoặc có tin nhắn</p>
+                            </div>
+                            <div class="section-actions">
+                                <button class="btn btn-outline btn-sm" onclick="refreshGroupsInfo()" title="Lấy lại tên và ảnh nhóm mới nhất từ LINE API">
+                                    <i class="fa-solid fa-arrows-rotate"></i>
+                                    <span>Làm mới tên nhóm</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-container" style="max-height: 380px; overflow-y: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th width="40">STT</th>
+                                        <th>Tên Nhóm</th>
+                                        <th>Group ID</th>
+                                        <th>Trạng Thái</th>
+                                        <th>Lần Hoạt Động</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="groups-tbody">
+                                    <!-- Rendered dynamically by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Hướng Dẫn Sử Dụng Lệnh LINE Cho Admin -->
+                    <div class="content-section" style="margin-bottom: 0;">
+                        <div class="section-header">
+                            <div>
+                                <h2>Lệnh Chat Hẹn Giờ Qua LINE</h2>
+                                <p>Admin có thể thiết lập lịch hẹn trực tiếp trên ứng dụng LINE</p>
+                            </div>
+                        </div>
+
+                        <div style="background: #F8FAFC; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 18px;">
+                            <div style="display: flex; flex-direction: column; gap: 14px; font-size: 0.88rem;">
+                                <div>
+                                    <strong style="color: #4F46E5; font-family: monospace; font-size: 0.95rem;">hengio [HH:mm] [Nội dung]</strong>
+                                    <div style="color: var(--text-muted); margin-top: 4px;">Tạo nhanh lịch hẹn hàng ngày vào giờ chỉ định (giờ Việt Nam).<br>
+                                    <em>Ví dụ:</em> <code style="background:#EEF2FF; color:#4F46E5; padding:2px 6px; border-radius:4px;">hengio 08:30 Kho vừa về thêm PMH mới nhé cả nhà!</code></div>
+                                </div>
+                                <hr style="border: 0; border-top: 1px dashed var(--border-color); margin: 2px 0;">
+                                <div>
+                                    <strong style="color: #4F46E5; font-family: monospace; font-size: 0.95rem;">thongbao [Nội dung]</strong>
+                                    <div style="color: var(--text-muted); margin-top: 4px;">Phát sóng thông báo ngay lập tức đến toàn bộ các nhóm BOT đang tham gia.</div>
+                                </div>
+                                <hr style="border: 0; border-top: 1px dashed var(--border-color); margin: 2px 0;">
+                                <div>
+                                    <strong style="color: #4F46E5; font-family: monospace; font-size: 0.95rem;">dsnhom</strong>
+                                    <div style="color: var(--text-muted); margin-top: 4px;">Xem danh sách tất cả các nhóm BOT đã được kết nối.</div>
+                                </div>
+                                <hr style="border: 0; border-top: 1px dashed var(--border-color); margin: 2px 0;">
+                                <div>
+                                    <strong style="color: #4F46E5; font-family: monospace; font-size: 0.95rem;">dslich</strong>
+                                    <div style="color: var(--text-muted); margin-top: 4px;">Xem danh sách các lịch hẹn đang chạy trên hệ thống.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -707,6 +862,146 @@ NDYXIKJL0L	ML200..." rows="8" oninput="previewBulkImport()"></textarea>
                     <button type="submit" class="btn btn-primary">
                         <i class="fa-solid fa-check"></i>
                         <span>Lưu Khai Báo</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: TẠO / SỬA LỊCH HẸN (SCHEDULE MODAL) ==================== -->
+    <div id="modal-schedule" class="modal-overlay hidden">
+        <div class="modal-box modal-md">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <div class="modal-icon-badge" style="background: #EEF2FF; color: #4F46E5;"><i class="fa-solid fa-clock"></i></div>
+                    <div>
+                        <h3 id="modal-schedule-title">Tạo Lịch Hẹn Giờ Thông Báo</h3>
+                        <p>Cấu hình thời gian và nội dung gửi tự động đến các nhóm</p>
+                    </div>
+                </div>
+                <button class="btn-close-modal" onclick="closeScheduleModal()">&times;</button>
+            </div>
+
+            <form id="form-schedule" onsubmit="handleSaveSchedule(event)">
+                <input type="hidden" id="schedule-edit-id">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="schedule-title"><i class="fa-solid fa-heading"></i> Tiêu Đề Gợi Nhớ <span class="text-danger">*</span></label>
+                        <input type="text" id="schedule-title" placeholder="VD: Báo cáo đầu ngày, Nhắc chốt đơn..." required class="form-control">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="schedule-content"><i class="fa-solid fa-message"></i> Nội Dung Tin Nhắn Thông Báo <span class="text-danger">*</span></label>
+                        <textarea id="schedule-content" rows="4" placeholder="Nhập nội dung bot sẽ gửi đến nhóm (hỗ trợ xuống dòng, emoji)..." required class="form-control" style="font-family: inherit; resize: vertical;"></textarea>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                        <div class="form-group">
+                            <label for="schedule-type"><i class="fa-solid fa-repeat"></i> Chu Kỳ Lặp</label>
+                            <select id="schedule-type" class="form-control" onchange="handleScheduleTypeChange()">
+                                <option value="DAILY">Hàng ngày (Mỗi ngày)</option>
+                                <option value="WEEKDAYS">Thứ 2 đến Thứ 6</option>
+                                <option value="ONCE">Một lần duy nhất</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="schedule-time"><i class="fa-regular fa-clock"></i> Giờ Gửi (VN UTC+7) <span class="text-danger">*</span></label>
+                            <input type="time" id="schedule-time" required class="form-control" value="08:00">
+                        </div>
+                    </div>
+
+                    <div class="form-group hidden" id="group-schedule-date">
+                        <label for="schedule-date"><i class="fa-regular fa-calendar-days"></i> Ngày Gửi (Chỉ áp dụng khi chọn Một lần)</label>
+                        <input type="date" id="schedule-date" class="form-control">
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-users"></i> Nhóm Nhận Thông Báo</label>
+                        <div style="display: flex; gap: 16px; margin-top: 6px; margin-bottom: 8px;">
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                                <input type="radio" name="target-type" id="target-type-all" value="ALL_GROUPS" checked onchange="toggleCustomGroupSelection(false)">
+                                <strong>Tất cả nhóm BOT tham gia</strong>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                                <input type="radio" name="target-type" id="target-type-custom" value="CUSTOM" onchange="toggleCustomGroupSelection(true)">
+                                <span>Chọn nhóm cụ thể</span>
+                            </label>
+                        </div>
+
+                        <div id="custom-groups-container" class="hidden" style="max-height: 140px; overflow-y: auto; background: #F8FAFC; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px;">
+                            <div id="custom-groups-checkboxes" style="display: flex; flex-direction: column; gap: 6px;">
+                                <!-- Rendered dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
+                            <input type="checkbox" id="schedule-active" checked style="width: 18px; height: 18px; accent-color: #10B981;">
+                            <span>Kích hoạt lịch hẹn này ngay</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeScheduleModal()">Hủy</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa-solid fa-check"></i>
+                        <span>Lưu Lịch Hẹn</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: GỬI THÔNG BÁO TỨC THÌ (BROADCAST MODAL) ==================== -->
+    <div id="modal-broadcast" class="modal-overlay hidden">
+        <div class="modal-box modal-md">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <div class="modal-icon-badge" style="background: #FEF3C7; color: #D97706;"><i class="fa-solid fa-bullhorn"></i></div>
+                    <div>
+                        <h3>Gửi Thông Báo Tức Thì (Broadcast)</h3>
+                        <p>Phát ngay thông điệp đến tất cả hoặc nhóm chat được chỉ định</p>
+                    </div>
+                </div>
+                <button class="btn-close-modal" onclick="closeBroadcastModal()">&times;</button>
+            </div>
+
+            <form id="form-broadcast" onsubmit="handleSendBroadcast(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="broadcast-content"><i class="fa-solid fa-message"></i> Nội Dung Thông Báo <span class="text-danger">*</span></label>
+                        <textarea id="broadcast-content" rows="4" placeholder="Nhập nội dung thông báo gửi ngay tới các nhóm..." required class="form-control" style="font-family: inherit; resize: vertical;"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-users"></i> Gửi Đến Nhóm</label>
+                        <div style="display: flex; gap: 16px; margin-top: 6px;">
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                                <input type="radio" name="broadcast-target-type" id="broadcast-target-all" value="ALL_GROUPS" checked onchange="toggleBroadcastCustomGroups(false)">
+                                <strong>Tất cả nhóm BOT tham gia</strong>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                                <input type="radio" name="broadcast-target-type" id="broadcast-target-custom" value="CUSTOM" onchange="toggleBroadcastCustomGroups(true)">
+                                <span>Chọn nhóm cụ thể</span>
+                            </label>
+                        </div>
+
+                        <div id="broadcast-groups-container" class="hidden" style="max-height: 140px; overflow-y: auto; background: #F8FAFC; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px; margin-top: 8px;">
+                            <div id="broadcast-groups-checkboxes" style="display: flex; flex-direction: column; gap: 6px;">
+                                <!-- Rendered dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeBroadcastModal()">Hủy</button>
+                    <button type="submit" class="btn btn-primary" style="background: #D97706; border-color: #D97706;">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span>Phát Thông Báo Ngay</span>
                     </button>
                 </div>
             </form>

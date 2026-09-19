@@ -96,6 +96,21 @@ const lineClient = {
     },
 
     /**
+     * Lấy thông tin tóm tắt của nhóm (Tên nhóm, Avatar) từ LINE API
+     */
+    async getGroupSummary(groupId) {
+        if (!groupId || !groupId.startsWith('C')) return null;
+
+        try {
+            const summary = await client.getGroupSummary(groupId);
+            return summary;
+        } catch (error) {
+            // Không log error ồn ào nếu bot chưa kịp load cache hoặc là room
+            return null;
+        }
+    },
+
+    /**
      * Đánh dấu tin nhắn đã đọc trên LINE
      */
     async markAsRead(chatId, markAsReadToken) {
