@@ -112,6 +112,11 @@
                     <span>Từ Khoá Tự Động</span>
                     <span class="badge badge-stock" id="badge-total-keywords" style="background: #FEF3C7; color: #D97706; border-color: #FDE68A;">0</span>
                 </button>
+                <button class="nav-item" data-tab="audit" onclick="switchTab('audit')">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>Nhật Ký Hoạt Động</span>
+                    <span class="badge badge-stock" id="badge-total-logs" style="background: #F1F5F9; color: #475569; border-color: #CBD5E1;">0</span>
+                </button>
             </nav>
 
             <div class="sidebar-footer">
@@ -769,6 +774,62 @@
 
                     <div id="keywords-grid-container" class="keywords-grid">
                         <!-- Rendered dynamically by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== TAB 7: NHẬT KÝ HOẠT ĐỘNG (AUDIT LOGS) ==================== -->
+            <section id="tab-audit" class="tab-pane">
+                <div class="content-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Nhật Ký Thao Tác Quản Trị</h2>
+                            <p>Ghi vết toàn bộ hành động nạp mã, xoá mã, đổi cú pháp và quản lý hệ thống</p>
+                        </div>
+                        <div class="section-actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <div class="search-box" style="width: 260px;">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input type="text" id="audit-search-input" placeholder="Tìm kiếm hành động, admin, chi tiết..." oninput="filterAuditLogs()">
+                            </div>
+                            <div class="filter-select-wrapper" style="width: 170px;">
+                                <select id="audit-action-filter" class="form-control" onchange="filterAuditLogs()">
+                                    <option value="ALL">Tất cả hành động</option>
+                                    <option value="IMPORT_COUPONS">Nạp mã kho</option>
+                                    <option value="DELETE_COUPON">Xoá mã đơn lẻ</option>
+                                    <option value="CLEAR_SENT">Xoá mã đã phát</option>
+                                    <option value="CLEAR_ALL">Xoá toàn bộ kho</option>
+                                    <option value="UPDATE_SYNTAX">Cập nhật cú pháp</option>
+                                    <option value="SCHEDULE">Lịch hẹn thông báo</option>
+                                    <option value="KEYWORD">Từ khoá tự động</option>
+                                    <option value="ADMIN">Quản lý Admin</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-secondary" onclick="loadAuditLogsFromFirebase(true)" title="Tải lại nhật ký">
+                                <i class="fa-solid fa-rotate-right"></i>
+                                <span>Làm Mới</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="margin-top: 16px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th width="50">STT</th>
+                                    <th width="160">Thời Gian</th>
+                                    <th width="130">Admin Thực Hiện</th>
+                                    <th width="160">Hành Động</th>
+                                    <th>Nội Dung Chi Tiết</th>
+                                </tr>
+                            </thead>
+                            <tbody id="audit-table-body">
+                                <tr>
+                                    <td colspan="5" class="text-center" style="padding: 30px; color: var(--text-muted);">
+                                        <i class="fa-solid fa-spinner fa-spin"></i> Đang tải nhật ký...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </section>

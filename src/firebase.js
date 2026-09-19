@@ -574,6 +574,87 @@ const Firebase = {
             console.error('[Firebase] Lỗi findKeywordReply:', error.message);
             return null;
         }
+    },
+
+    /**
+     * Thu hồi mã coupon về kho (trạng thái UNUSED)
+     */
+    async revokeCoupon(couponCode, reason = 'Thu hồi do trùng MĐH') {
+        try {
+            const res = await axios.get(`${dbUrl}/coupons.json`, { timeout: 8000 });
+            const coupons = res.data;
+            if (!coupons) return false;
+
+            const cleanCode = String(couponCode || '').trim().toUpperCase();
+            let targetKey = null;
+
+            if (Array.isArray(coupons)) {
+                const idx = coupons.findIndex(c => c && String(c.code).trim().toUpperCase() === cleanCode);
+                if (idx !== -1) targetKey = idx;
+            } else if (typeof coupons === 'object') {
+                const entry = Object.entries(coupons).find(([k, v]) => v && String(v.code).trim().toUpperCase() === cleanCode);
+                if (entry) targetKey = entry[0];
+            }
+
+            if (targetKey === null) {
+                console.warn(`[Firebase] Không tìm thấy mã coupon "${couponCode}" để thu hồi.`);
+                return false;
+            }
+
+            const url = `${dbUrl}/coupons/${targetKey}.json`;
+            await axios.patch(url, {
+                status: 'UNUSED',
+                warehouse: '',
+                orderId: '',
+                recipient: '',
+                recipientId: '',
+                updatedAt: new Date().toISOString(),
+                revokedAt: new Date().toISOString(),
+                revokeReason: reason
+            }, { timeout: 5000 });
+
+            console.log(`[Firebase] Đã thu hồi mã coupon "${couponCode}" về kho thành công.`);
+            return true;
+        } catch (error) {
+            console.error('[Firebase] Lỗi revokeCoupon:', error.message);
+            return false;
+        }
+    },
+
+    /**
+     * Ghi nhật ký thao tác quản trị (Audit Logs)
+     */
+    async logAudit(adminUser, action, description, details = {}) {
+        try {
+            await axios.post(`${dbUrl}/audit_logs.json`, {
+                adminUser: String(adminUser || 'Admin'),
+                action: String(action || 'ACTION'),
+                description: String(description || ''),
+                details: details || {},
+                timestamp: new Date().toISOString()
+            }, { timeout: 5000 });
+            return true;
+        } catch (error) {
+            console.error('[Firebase] Lỗi logAudit:', error.message);
+            return false;
+        }
+    },
+
+    /**
+     * Lấy danh sách nhật ký thao tác quản trị
+     */
+    async getAuditLogs(limit = 200) {
+        try {
+            const res = await axios.get(`${dbUrl}/audit_logs.json`, { timeout: 8000 });
+            const data = res.data;
+            if (!data) return [];
+            const list = Object.entries(data).map(([id, val]) => ({ id, ...val }));
+            list.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+            return list.slice(0, limit);
+        } catch (error) {
+            console.error('[Firebase] Lỗi getAuditLogs:', error.message);
+            return [];
+        }
     }
 };
 

@@ -324,19 +324,20 @@ async function handleLineEvent(event) {
             }
         }
 
+        const quickReply = lineClient.getQuickReplyMenu();
         if (matchedBlocks.length > 0) {
             const replyMsg =
                 `🎯 MÃ PMH CỦA BẠN (${primaryDisplayName}):\n` +
                 `━━━━━━━━━━━━━━━━━━━━━\n` +
                 matchedBlocks.join('\n━━━━━━━━━━━━━━━━━━━━━\n');
-            await lineClient.replyText(replyToken, replyMsg, quoteToken);
+            await lineClient.replyText(replyToken, replyMsg, quoteToken, quickReply);
             return;
         } else {
             const replyMsg =
                 `❌ Không tìm thấy mã PMH nào liên quan đến tên LINE "${primaryDisplayName}" của bạn trong danh sách trên.\n` +
                 `━━━━━━━━━━━━━━━━━━━━━\n` +
                 `👉 Quản lý vui lòng kiểm tra lại tên hiển thị khi gửi đơn trong nhóm chat hoặc liên hệ Admin nếu có sai sót.`;
-            await lineClient.replyText(replyToken, replyMsg, quoteToken);
+            await lineClient.replyText(replyToken, replyMsg, quoteToken, quickReply);
             return;
         }
     }
@@ -509,10 +510,11 @@ async function handleLineEvent(event) {
     if (isCp) {
         console.log('[BOT] Đang lấy cú pháp gửi về cho nhóm/user...');
         const syntax = await Firebase.getSyntax();
+        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu() : null;
         if (!syntax) {
-            await lineClient.replyText(replyToken, '❌ Chưa có cú pháp nào trên hệ thống Web Quản Trị.', quoteToken);
+            await lineClient.replyText(replyToken, '❌ Chưa có cú pháp nào trên hệ thống Web Quản Trị.', quoteToken, quickReply);
         } else {
-            await lineClient.replyText(replyToken, syntax, quoteToken);
+            await lineClient.replyText(replyToken, syntax, quoteToken, quickReply);
         }
         return;
     }
@@ -522,7 +524,44 @@ async function handleLineEvent(event) {
     if (isTk) {
         console.log('[BOT] Đang lấy thống kê tồn kho gửi về cho nhóm/user...');
         const statsMessage = await couponService.getStatisticsMessage();
-        await lineClient.replyText(replyToken, statsMessage, quoteToken);
+        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu() : null;
+        await lineClient.replyText(replyToken, statsMessage, quoteToken, quickReply);
+        return;
+    }
+
+    // 3.5 Lệnh Lịch Sử Nhận Mã Hôm Nay (ls / lichsu)
+    const isLs = lowerText === 'ls' || lowerText.startsWith('ls ') || lowerText === 'lichsu' || lowerText === 'lich su' || lowerText === 'lịch sử' || lowerText === '.ls' || lowerText === '/ls';
+    if (isLs) {
+        console.log(`[BOT] Tra cứu lịch sử nhận mã hôm nay cho user: ${userId}`);
+        const historyData = await couponService.getUserTodayHistory(userId);
+        let historyMsg = '';
+        if (!historyData || historyData.count === 0) {
+            historyMsg = [
+                `📜 LỊCH SỬ NHẬN MÃ HÔM NAY (${historyData?.todayDisplay || 'HÔM NAY'}):`,
+                `━━━━━━━━━━━━━━━━━━━━━`,
+                `ℹ️ Hôm nay bạn chưa được cấp mã PMH nào!`,
+                `━━━━━━━━━━━━━━━━━━━━━`,
+                `💡 Gõ "cp" để lấy mẫu form xin mã PMH, "tk" xem tồn kho.`
+            ].join(NL);
+        } else {
+            const listLines = historyData.items.map(item => {
+                return `${item.stt}. [${item.time}] MĐH: ${item.mdh} (Kho: ${item.maKho})${NL}   ➜ PMH ${item.loaiPMH} : ${item.code}`;
+            }).join(NL + NL);
+
+            historyMsg = [
+                `📜 LỊCH SỬ NHẬN MÃ HÔM NAY (${historyData.todayDisplay}):`,
+                `━━━━━━━━━━━━━━━━━━━━━`,
+                `👤 Quản lý: ${historyData.items[0]?.displayName || 'Bạn'}`,
+                `📊 Tổng cộng đã nhận: ${historyData.count} mã`,
+                `━━━━━━━━━━━━━━━━━━━━━`,
+                listLines,
+                `━━━━━━━━━━━━━━━━━━━━━`,
+                `💡 Gõ "tk" để kiểm tra tồn kho PMH.`
+            ].join(NL);
+        }
+
+        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu() : null;
+        await lineClient.replyText(replyToken, historyMsg, quoteToken, quickReply);
         return;
     }
 
@@ -530,6 +569,7 @@ async function handleLineEvent(event) {
     const isHd = lowerText === 'hd' || lowerText === 'hướng dẫn' || lowerText === 'huong dan' || lowerText === '.hd' || lowerText === '/hd';
     if (isHd) {
         const hasAdminPermission = await isAdmin(userId);
+        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu() : null;
         if (hasAdminPermission && isPrivateChat) {
             const guide = [
                 '📖 HƯỚNG DẪN DÀNH CHO ADMIN:',
@@ -543,12 +583,13 @@ async function handleLineEvent(event) {
                 '• "thongbao [Nội dung]": Phát sóng tức thì tới tất cả nhóm.',
                 '• "/tukhoa": Xem danh sách từ khoá tự động.',
                 '• "tk": Xem thống kê tồn kho các loại PMH.',
-                '• "cp": Xem cú pháp đăng ký hiện tại.'
+                '• "cp": Xem cú pháp đăng ký hiện tại.',
+                '• "ls": Xem lịch sử nhận mã trong ngày hôm nay.'
             ].join(NL);
-            await lineClient.replyText(replyToken, guide, quoteToken);
+            await lineClient.replyText(replyToken, guide, quoteToken, quickReply);
         } else {
             const syntax = await Firebase.getSyntax();
-            await lineClient.replyText(replyToken, syntax || '💡 Gõ "cp" để lấy mẫu xin PMH, "/tukhoa" xem danh sách từ khoá.', quoteToken);
+            await lineClient.replyText(replyToken, syntax || '💡 Gõ "cp" để lấy mẫu xin PMH, "/tukhoa" xem danh sách từ khoá, "ls" xem lịch sử nhận mã hôm nay.', quoteToken, quickReply);
         }
         return;
     }
@@ -629,11 +670,12 @@ async function handleLineEvent(event) {
                 '⚠️ BOT KHÔNG HỖ TRỢ NHẬN FORM XIN MÃ KHI CHAT RIÊNG 1-1 ⚠️\n' +
                 '━━━━━━━━━━━━━━━━━━━━━\n' +
                 '👉 Quản lý vui lòng gửi form đăng ký xin cấp mã PMH vào NHÓM CHAT QUẢN LÝ để được hệ thống kiểm tra và phát mã.\n\n' +
-                '💡 Khi chat riêng 1-1 với BOT, bạn có thể:\n' +
-                '• Gõ "cp": Lấy mẫu form cú pháp xin mã\n' +
-                '• Gõ "tk": Tra cứu số lượng tồn kho PMH\n' +
+                '💡 Khi chat riêng 1-1 với BOT, bạn có thể bấm nút bên dưới:\n' +
+                '• "cp": Lấy mẫu form cú pháp xin mã\n' +
+                '• "tk": Tra cứu số lượng tồn kho PMH\n' +
+                '• "ls": Tra cứu lịch sử mã đã nhận hôm nay\n' +
                 '• Chuyển tiếp danh sách phát mã ("➜ PMH") để BOT lọc riêng mã của bạn.';
-            await lineClient.replyText(replyToken, refuseMsg, quoteToken);
+            await lineClient.replyText(replyToken, refuseMsg, quoteToken, lineClient.getQuickReplyMenu());
             return;
         }
 
@@ -664,17 +706,48 @@ async function handleCouponRequest(payload) {
     const data = parsed.data;
     const displayName = await lineClient.getDisplayName(payload.userId, payload.sourceId);
 
-    // Kiểm tra trùng lặp
+    // Kiểm tra trùng lặp MĐH
     const dupCheck = await couponService.checkDuplicateRequest(payload.userId, data.loaiPMH, data.mdh);
-    if (dupCheck.action === 'block_same_type') {
-        await lineClient.replyText(payload.replyToken, '❌ MĐH này đã được cấp PMH.', payload.quoteToken);
-        return;
+    let isReplaced = false;
+    let oldCode = '';
+    let oldType = '';
+    let oldTime = '';
+    let oldRecipient = '';
+
+    if (dupCheck.action === 'revoke_and_reissue' && dupCheck.existing) {
+        isReplaced = true;
+        oldCode = dupCheck.existing.couponCode || '';
+        oldType = dupCheck.existing.loaiPMH || 'PMH';
+        oldRecipient = dupCheck.existing.displayName || 'Quản lý';
+        try {
+            const d = new Date(dupCheck.existing.createdAt || dupCheck.existing.updatedAt);
+            const timeFormatter = new Intl.DateTimeFormat('vi-VN', {
+                timeZone: 'Asia/Ho_Chi_Minh',
+                hour: '2-digit',
+                minute: '2-digit',
+                day: '2-digit',
+                month: '2-digit',
+                hour12: false
+            });
+            oldTime = timeFormatter.format(d);
+        } catch (e) {
+            oldTime = 'trước đó';
+        }
     }
 
     // Tìm mã coupon chưa sử dụng trong Firebase
     const coupon = await Firebase.findFirstUnusedCoupon(data.loaiPMH);
 
     if (!coupon) {
+        if (isReplaced) {
+            await lineClient.replyText(
+                payload.replyToken,
+                `❌ Kho đã hết mã PMH loại "${data.loaiPMH}" để cấp lại! Mã cũ "${oldCode}" của MĐH ${data.mdh} vẫn được giữ nguyên.`,
+                payload.quoteToken
+            );
+            return;
+        }
+
         // Ghi nhận hết mã
         await Firebase.createRequest({
             messageId: payload.messageId,
@@ -699,6 +772,12 @@ async function handleCouponRequest(payload) {
     const couponId = coupon.index !== undefined ? coupon.index : coupon.key;
 
     if (isAutoApprove) {
+        // Nếu là đơn đổi mã do trùng MĐH: Thu hồi mã cũ về kho
+        if (isReplaced && oldCode) {
+            console.log(`[BOT] Thu hồi mã cũ "${oldCode}" của MĐH ${data.mdh} để cấp mã mới "${coupon.code}"...`);
+            await Firebase.revokeCoupon(oldCode, `Thu hồi cấp lại mã mới cho MĐH ${data.mdh}`);
+        }
+
         // Cập nhật trạng thái phiếu đã phát
         await Firebase.markCouponSent(couponId, {
             warehouse: data.maKho,
@@ -718,7 +797,9 @@ async function handleCouponRequest(payload) {
             status: CONFIG.REQUEST_STATUS_SENT,
             couponCode: coupon.code,
             chatId: payload.sourceId,
-            approvedBy: 'BOT_AUTO'
+            approvedBy: isReplaced ? 'BOT_AUTO_REPLACE' : 'BOT_AUTO',
+            isReplaced: isReplaced,
+            oldCode: oldCode
         });
 
         // Kiểm tra số lượng tồn còn lại để đính kèm cảnh báo trực tiếp vào tin phát mã
@@ -734,9 +815,38 @@ async function handleCouponRequest(payload) {
             stockHint = `${NL}(🟡 Sắp hết: Kho ${data.loaiPMH} còn ${remaining} mã!)`;
         }
 
-        // Trả lời phát mã trích dẫn ngay lập tức
-        const sendMsg = `${displayName}${NL}➜ PMH ${data.loaiPMH} : ${coupon.code}${stockHint}`;
-        await lineClient.replyText(payload.replyToken, sendMsg, payload.quoteToken);
+        let sendMsg = '';
+        if (isReplaced && oldCode) {
+            sendMsg =
+                `🔄 THU HỒI & CẤP LẠI MÃ PMH (TRÙNG MĐH: ${data.mdh})\n` +
+                `━━━━━━━━━━━━━━━━━━━━━\n` +
+                `ℹ️ Thông tin mã "${oldCode}" (${oldType}) vừa cấp lúc ${oldTime} cho ${oldRecipient} đã được THU HỒI vào kho.\n` +
+                `🎯 Mã mới được cấp là:\n` +
+                `${displayName}\n` +
+                `➜ PMH ${data.loaiPMH} : ${coupon.code}${stockHint}`;
+        } else {
+            sendMsg = `${displayName}${NL}➜ PMH ${data.loaiPMH} : ${coupon.code}${stockHint}`;
+        }
+
+        // Tạo Flex Message Card đồ hoạ đẹp mắt
+        const flexCard = lineClient.createCouponFlexCard({
+            displayName,
+            loaiPMH: data.loaiPMH,
+            code: coupon.code,
+            mdh: data.mdh,
+            maKho: data.maKho,
+            stockHint,
+            isReplaced,
+            oldCode,
+            oldType,
+            oldTime
+        });
+
+        // Gửi Flex Message Card kèm fallback Text trích dẫn
+        const ok = await lineClient.replyFlex(payload.replyToken, sendMsg, flexCard, payload.quoteToken);
+        if (!ok) {
+            await lineClient.replyText(payload.replyToken, sendMsg, payload.quoteToken);
+        }
 
         // Kích hoạt cảnh báo tự động tới các nhóm & admin (nếu chạm mốc < 30, < 20, < 10, = 0)
         couponService.checkAndSendLowStockAlert(data.loaiPMH, payload.sourceId).catch(err => {
@@ -826,10 +936,22 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
         }
 
         const replyMsg = `${targetReq.displayName}${NL}➜ PMH ${targetReq.loaiPMH} : ${couponCode}${stockHint}`;
-        await lineClient.replyText(replyToken, replyMsg, quoteToken);
+        const flexCard = lineClient.createCouponFlexCard({
+            displayName: targetReq.displayName,
+            loaiPMH: targetReq.loaiPMH,
+            code: couponCode,
+            mdh: targetReq.mdh,
+            maKho: targetReq.maKho,
+            stockHint
+        });
+
+        const ok = await lineClient.replyFlex(replyToken, replyMsg, flexCard, quoteToken);
+        if (!ok) {
+            await lineClient.replyText(replyToken, replyMsg, quoteToken);
+        }
 
         // Kích hoạt cảnh báo tự động tới các nhóm & admin
-        couponService.checkAndSendLowStockAlert(targetReq.loaiPMH, payload.sourceId).catch(err => {
+        couponService.checkAndSendLowStockAlert(targetReq.loaiPMH, sourceId).catch(err => {
             console.error('[BotHandler] Lỗi checkAndSendLowStockAlert:', err.message);
         });
         return;

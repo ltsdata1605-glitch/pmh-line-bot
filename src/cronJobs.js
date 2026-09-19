@@ -22,6 +22,14 @@ function setupCronJobs() {
         console.log('[Cron] Chạy báo cáo thống kê 15:00 PM VN...');
         await sendDailyReport('☀️ BÁO CÁO GIỮA CA (15:00 PM)');
     });
+
+    // 4. Báo cáo tổng kết ca / cuối ngày tự động (Daily Recap) lúc 22:00 PM giờ Việt Nam
+    cron.schedule('0 22 * * *', async () => {
+        console.log('[Cron] Chạy báo cáo tổng kết cuối ngày 22:00 PM VN (Daily Recap)...');
+        await sendDailyRecapReport();
+    }, {
+        timezone: 'Asia/Ho_Chi_Minh'
+    });
 }
 
 /**
@@ -229,9 +237,40 @@ async function sendDailyReport(title) {
     }
 }
 
+/**
+ * Báo cáo tổng kết cuối ngày 22:00 (Daily Recap)
+ */
+async function sendDailyRecapReport() {
+    try {
+        const groups = await Firebase.getGroups();
+        const targetChatIds = groups.filter(g => g.active !== false).map(g => g.groupId);
+
+        if (!targetChatIds || targetChatIds.length === 0) {
+            console.log('[Cron] Chưa có nhóm chat nào để gửi Daily Recap 22:00.');
+            return;
+        }
+
+        const recapMessage = await couponService.generateDailyRecapMessage();
+        if (!recapMessage) return;
+
+        let sent = 0;
+        for (const chatId of targetChatIds) {
+            const ok = await lineClient.pushText(chatId, recapMessage);
+            if (ok) sent++;
+            await new Promise(r => setTimeout(r, 200));
+        }
+
+        console.log(`[Cron] Đã gửi báo cáo Daily Recap 22:00 tới ${sent}/${targetChatIds.length} nhóm chat.`);
+        await Firebase.logSystem('DAILY_RECAP_SENT', { sentCount: sent, totalGroups: targetChatIds.length });
+    } catch (e) {
+        console.error('[Cron] Lỗi sendDailyRecapReport:', e.message);
+    }
+}
+
 module.exports = {
     setupCronJobs,
     checkAndRunSchedules,
     executeSchedule,
-    broadcastMessage
+    broadcastMessage,
+    sendDailyRecapReport
 };

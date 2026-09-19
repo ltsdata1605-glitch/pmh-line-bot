@@ -295,6 +295,10 @@ function switchTab(tabId) {
         descEl.innerText = 'Quản lý danh sách từ khoá tự động phản hồi nội dung và hình ảnh khi người dùng chat';
         renderKeywordsGrid();
         updateKeywordMetrics();
+    } else if (tabId === 'audit') {
+        titleEl.innerText = 'Nhật Ký Thao Tác Quản Trị';
+        descEl.innerText = 'Ghi vết toàn bộ hành động nạp mã, xoá mã, đổi cú pháp và quản lý hệ thống';
+        loadAuditLogsFromFirebase();
     }
 }
 
@@ -704,6 +708,7 @@ function deleteSingleCouponPrompt(code) {
     if (confirm(`Bạn có chắc chắn muốn xóa mã coupon "${code}" khỏi hệ thống?`)) {
         appState.coupons = appState.coupons.filter(c => c.code !== code);
         saveAndSyncCoupons();
+        recordAuditLog('DELETE_COUPON', `Xoá mã coupon "${code}" khỏi kho`);
         renderCouponsTable();
         renderDashboard();
         updateTypeDropdowns();
@@ -735,6 +740,7 @@ function clearAllCouponsPrompt() {
 
     appState.coupons = [];
     saveAndSyncCoupons();
+    recordAuditLog('CLEAR_ALL', `Xoá sạch toàn bộ ${totalCount.toLocaleString('vi-VN')} mã coupon trong kho`);
     renderCouponsTable();
     renderDashboard();
     updateTypeDropdowns();
@@ -751,6 +757,7 @@ function clearSentCouponsPrompt() {
     if (confirm(`Bạn có chắc muốn dọn dẹp và XÓA TOÀN BỘ ${sentCount} mã đã phát khỏi hệ thống? (Các mã chưa sử dụng vẫn được giữ nguyên)`)) {
         appState.coupons = appState.coupons.filter(c => c.status === 'UNUSED');
         saveAndSyncCoupons();
+        recordAuditLog('CLEAR_SENT', `Xoá ${sentCount} mã coupon đã phát`);
         renderCouponsTable();
         renderDashboard();
         updateTypeDropdowns();
@@ -1060,6 +1067,7 @@ function confirmBulkImport() {
     });
 
     saveAndSyncCoupons();
+    recordAuditLog('IMPORT_COUPONS', `Nạp file danh sách mã coupon: ${addedCount} mã mới, ${updatedCount} mã cập nhật`);
     closeBulkImportModal();
     renderCouponsTable();
     renderDashboard();
@@ -1177,6 +1185,7 @@ function saveSyntaxToFirebase() {
         })
         .then(() => {
             showSyncing(false);
+            recordAuditLog('UPDATE_SYNTAX', 'Cập nhật nội dung cú pháp đăng ký PMH');
             showToast('Đã lưu cú pháp thành công lên Firebase!', 'success');
         })
         .catch(err => {
@@ -2285,6 +2294,7 @@ function handleSaveSchedule(e) {
         body: JSON.stringify(schedObj)
     })
     .then(() => {
+        recordAuditLog('SCHEDULE', `Lưu lịch thông báo "${title}" (${schedObj.time})`);
         showToast(`Đã lưu lịch hẹn "${title}" thành công!`, 'success');
     })
     .catch(err => {
@@ -2325,6 +2335,7 @@ function deleteSchedulePrompt(schedId) {
         const url = getFirebaseEndpoint(`/schedules/${schedId}.json`);
         fetch(url, { method: 'DELETE' })
         .then(() => {
+            recordAuditLog('SCHEDULE', `Xoá lịch thông báo "${target.title}"`);
             showToast(`Đã xóa lịch hẹn "${target.title}"!`, 'success');
         })
         .catch(err => console.error(err));
@@ -2831,8 +2842,129 @@ function deleteKeywordPrompt(kwId) {
         const url = getFirebaseEndpoint(`/keywords/${kwId}.json`);
         fetch(url, { method: 'DELETE' })
         .then(() => {
+            recordAuditLog('KEYWORD', `Xoá từ khoá "#${target.keyword}"`);
             showToast(`Đã xóa từ khoá "#${target.keyword}"!`, 'success');
         })
         .catch(err => console.error(err));
     }
+}
+
+// ==================== 15. NHẬT KÝ THAO TÁC QUẢN TRỊ (AUDIT LOGS) ====================
+let appAuditLogs = [];
+
+function recordAuditLog(action, description, details = {}) {
+    const currentAdmin = appState.currentUser || sessionStorage.getItem('pmh_auth_user') || localStorage.getItem('pmh_auth_user') || 'Admin';
+    const logItem = {
+        adminUser: String(currentAdmin),
+        action: action,
+        description: description,
+        details: details,
+        timestamp: new Date().toISOString()
+    };
+
+    if (appState.firebaseConfig.databaseUrl) {
+        const url = getFirebaseEndpoint('/audit_logs.json');
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(logItem)
+        }).catch(err => console.error('Lỗi lưu audit log:', err));
+    }
+}
+
+function loadAuditLogsFromFirebase(isUserClick = false) {
+    if (!appState.firebaseConfig.databaseUrl) {
+        if (isUserClick) showToast('Chưa cấu hình Firebase URL', 'info');
+        return;
+    }
+
+    if (isUserClick) showToast('Đang tải nhật ký thao tác...', 'info');
+    const url = getFirebaseEndpoint('/audit_logs.json');
+    fetch(url)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+            if (!data) {
+                appAuditLogs = [];
+            } else {
+                appAuditLogs = Object.entries(data).map(([id, val]) => ({ id, ...val }));
+                appAuditLogs.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+            }
+            const badge = document.getElementById('badge-total-logs');
+            if (badge) badge.innerText = appAuditLogs.length;
+            renderAuditLogsTable();
+            if (isUserClick) showToast('Đã làm mới nhật ký!', 'success');
+        })
+        .catch(err => {
+            console.error('Lỗi tải audit logs:', err);
+            if (isUserClick) showToast('Không thể tải nhật ký', 'error');
+        });
+}
+
+function renderAuditLogsTable(filteredLogs = null) {
+    const tbody = document.getElementById('audit-table-body');
+    if (!tbody) return;
+
+    const list = filteredLogs !== null ? filteredLogs : appAuditLogs;
+    if (!list || list.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center" style="padding: 30px; color: var(--text-muted);">
+                    <i class="fa-regular fa-folder-open" style="font-size: 1.5rem; margin-bottom: 8px; display: block;"></i>
+                    Chưa có nhật ký thao tác nào được ghi nhận.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    const actionBadgeMap = {
+        'IMPORT_COUPONS': '<span class="status-badge status-unused" style="background:#ECFDF5; color:#059669; border-color:#A7F3D0;"><i class="fa-solid fa-file-import"></i> Nạp mã kho</span>',
+        'DELETE_COUPON': '<span class="status-badge" style="background:#FEF2F2; color:#DC2626; border-color:#FECACA;"><i class="fa-solid fa-trash"></i> Xoá mã đơn</span>',
+        'CLEAR_SENT': '<span class="status-badge" style="background:#FFF7ED; color:#C2410C; border-color:#FFEDD5;"><i class="fa-solid fa-trash-can"></i> Xoá mã đã phát</span>',
+        'CLEAR_ALL': '<span class="status-badge" style="background:#450A0A; color:#FEE2E2; border-color:#991B1B;"><i class="fa-solid fa-triangle-exclamation"></i> Xoá toàn bộ kho</span>',
+        'UPDATE_SYNTAX': '<span class="status-badge" style="background:#EEF2FF; color:#4F46E5; border-color:#C7D2FE;"><i class="fa-solid fa-file-code"></i> Cú pháp PMH</span>',
+        'SCHEDULE': '<span class="status-badge" style="background:#F0FDF4; color:#16A34A; border-color:#BBF7D0;"><i class="fa-solid fa-clock"></i> Lịch thông báo</span>',
+        'KEYWORD': '<span class="status-badge" style="background:#FEF3C7; color:#D97706; border-color:#FDE68A;"><i class="fa-solid fa-spell-check"></i> Từ khoá tự động</span>',
+        'ADMIN': '<span class="status-badge" style="background:#F3E8FF; color:#9333EA; border-color:#E9D5FF;"><i class="fa-solid fa-user-shield"></i> Quản lý Admin</span>'
+    };
+
+    let html = '';
+    list.forEach((log, idx) => {
+        let timeFormatted = log.timestamp || '-';
+        try {
+            const d = new Date(log.timestamp);
+            timeFormatted = d.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+        } catch (e) {}
+
+        const actionBadge = actionBadgeMap[log.action] || `<span class="status-badge">${log.action || 'Hành động'}</span>`;
+        const adminBadge = `<span style="font-family: monospace; font-weight: 700; color: #4F46E5; background: #EEF2FF; padding: 2px 8px; border-radius: 4px;">${log.adminUser || 'Admin'}</span>`;
+
+        html += `
+            <tr>
+                <td>${idx + 1}</td>
+                <td style="color: var(--text-secondary); font-size: 0.85rem;"><i class="fa-regular fa-clock" style="margin-right: 4px;"></i>${timeFormatted}</td>
+                <td>${adminBadge}</td>
+                <td>${actionBadge}</td>
+                <td style="font-weight: 500; color: #334155;">${escapeHtml(log.description || '-')}</td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+}
+
+function filterAuditLogs() {
+    const searchVal = (document.getElementById('audit-search-input')?.value || '').toLowerCase().trim();
+    const actionVal = document.getElementById('audit-action-filter')?.value || 'ALL';
+
+    const filtered = appAuditLogs.filter(log => {
+        if (actionVal !== 'ALL' && log.action !== actionVal) return false;
+        if (searchVal) {
+            const text = `${log.adminUser || ''} ${log.action || ''} ${log.description || ''}`.toLowerCase();
+            if (!text.includes(searchVal)) return false;
+        }
+        return true;
+    });
+
+    renderAuditLogsTable(filtered);
 }

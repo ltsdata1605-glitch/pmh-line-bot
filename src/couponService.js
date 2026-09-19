@@ -225,7 +225,8 @@ const couponService = {
     },
 
     /**
-     * Kiểm tra trùng lặp yêu cầu xin mã
+     * Kiểm tra trùng lặp MĐH xin mã
+     * Yêu cầu: Nếu đã cấp thì phát hiện để thu hồi mã cũ và cấp mã mới
      */
     async checkDuplicateRequest(userId, loaiPMH, mdh) {
         if (!mdh) return { action: 'allow' };
@@ -234,20 +235,177 @@ const couponService = {
         const normMdh = String(mdh).trim().toUpperCase();
         const normType = String(loaiPMH).trim().toUpperCase();
 
-        const duplicate = requests.find(r => {
+        const duplicate = requests.slice().reverse().find(r => {
             return String(r.mdh || '').trim().toUpperCase() === normMdh &&
-                (r.status === CONFIG.REQUEST_STATUS_SENT || r.status === CONFIG.REQUEST_STATUS_PENDING);
+                (r.status === CONFIG.REQUEST_STATUS_SENT || r.status === 'SENT') &&
+                r.couponCode;
         });
 
         if (duplicate) {
-            if (String(duplicate.loaiPMH).trim().toUpperCase() === normType) {
-                return { action: 'block_same_type', existing: duplicate };
-            } else {
-                return { action: 'allow_with_change_notice', existing: duplicate };
-            }
+            return {
+                action: 'revoke_and_reissue',
+                existing: duplicate
+            };
         }
 
         return { action: 'allow' };
+    },
+
+    /**
+     * Lấy lịch sử nhận mã PMH của người dùng trong ngày hôm nay (00:00 - 23:59)
+     */
+    async getUserTodayHistory(userId) {
+        if (!userId) return null;
+
+        const requests = await Firebase.getRequests();
+        const now = new Date();
+
+        const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const todayStr = dateFormatter.format(now); // "YYYY-MM-DD"
+
+        const todayFormatter = new Intl.DateTimeFormat('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+        const todayDisplay = todayFormatter.format(now); // "DD/MM/YYYY"
+
+        const timeFormatter = new Intl.DateTimeFormat('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+
+        // Lọc các mã được phát hôm nay của Quản lý này
+        const matched = requests.filter(r => {
+            if (r.userId !== userId && r.recipientId !== userId) return false;
+            if (r.status !== CONFIG.REQUEST_STATUS_SENT && r.status !== 'SENT') return false;
+            if (!r.couponCode) return false;
+
+            const reqDate = new Date(r.createdAt || r.updatedAt || 0);
+            try {
+                return dateFormatter.format(reqDate) === todayStr;
+            } catch (e) {
+                return false;
+            }
+        });
+
+        const items = matched.map((r, idx) => {
+            let timeStr = '--:--';
+            try {
+                timeStr = timeFormatter.format(new Date(r.createdAt || r.updatedAt));
+            } catch (e) {}
+
+            return {
+                stt: idx + 1,
+                time: timeStr,
+                loaiPMH: r.loaiPMH || 'PMH',
+                code: r.couponCode,
+                mdh: r.mdh || '-',
+                maKho: r.maKho || '-',
+                displayName: r.displayName || 'Quản lý'
+            };
+        });
+
+        return {
+            todayDisplay,
+            count: items.length,
+            items
+        };
+    },
+
+    /**
+     * Tạo báo cáo tổng kết cuối ngày lúc 22:00 (Daily Recap)
+     */
+    async generateDailyRecapMessage() {
+        const requests = await Firebase.getRequests();
+        const coupons = await Firebase.getCoupons();
+        const now = new Date();
+
+        const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const todayStr = dateFormatter.format(now); // "YYYY-MM-DD"
+
+        const todayFormatter = new Intl.DateTimeFormat('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+        const todayDisplay = todayFormatter.format(now); // "DD/MM/YYYY"
+
+        // Lọc các yêu cầu đã phát trong ngày hôm nay
+        const todayRequests = requests.filter(r => {
+            if (r.status !== CONFIG.REQUEST_STATUS_SENT && r.status !== 'SENT') return false;
+            if (!r.couponCode) return false;
+            const reqDate = new Date(r.createdAt || r.updatedAt || 0);
+            try {
+                return dateFormatter.format(reqDate) === todayStr;
+            } catch (e) {
+                return false;
+            }
+        });
+
+        const totalSentToday = todayRequests.length;
+
+        // Thống kê theo loại PMH
+        const typeCounts = {};
+        const whCounts = {};
+
+        todayRequests.forEach(r => {
+            const t = String(r.loaiPMH || 'PMH').trim().toUpperCase();
+            typeCounts[t] = (typeCounts[t] || 0) + 1;
+
+            const w = String(r.maKho || '').trim();
+            if (w) {
+                whCounts[w] = (whCounts[w] || 0) + 1;
+            }
+        });
+
+        let typeBreakdown = '';
+        if (Object.keys(typeCounts).length > 0) {
+            typeBreakdown = Object.entries(typeCounts)
+                .map(([type, count]) => `${type}: ${count} mã`)
+                .join(' | ');
+        } else {
+            typeBreakdown = 'Chưa phát sinh lượt cấp mã trong ngày';
+        }
+
+        let topWarehouses = '';
+        const sortedWh = Object.entries(whCounts).sort((a, b) => b[1] - a[1]);
+        if (sortedWh.length > 0) {
+            topWarehouses = sortedWh
+                .slice(0, 5)
+                .map(([kho, count]) => `Kho ${kho} (${count} mã)`)
+                .join(', ');
+        } else {
+            topWarehouses = 'Không có';
+        }
+
+        // Đếm tồn kho hiện tại
+        const remainingStock = coupons.filter(c => c.status === 'UNUSED' || !c.status).length;
+
+        const lines = [
+            `📊 BÁO CÁO PHÁT MÃ NGÀY ${todayDisplay}:`,
+            `━━━━━━━━━━━━━━━━━━━━━`,
+            `• Tổng mã đã phát trong ngày: ${totalSentToday} mã`,
+            `• ${typeBreakdown}`,
+            `• Top siêu thị xin nhiều: ${topWarehouses}`,
+            `• Tồn kho hiện tại: Còn ${remainingStock.toLocaleString('vi-VN')} mã`
+        ];
+
+        return lines.join(NL);
     }
 };
 
