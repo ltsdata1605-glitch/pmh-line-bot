@@ -164,15 +164,25 @@ const couponService = {
                 if (m) displayName = m[1].trim();
             }
 
-            const alertMessage = [
+            // Tính toán dự báo tốc độ tiêu thụ và thời gian cạn kho
+            const forecast = await this.calculateDepletionForecast(normType, remaining);
+
+            const alertLines = [
                 `⚠️ CẢNH BÁO: KHO SẮP HẾT MÃ PMH ⚠️`,
                 `━━━━━━━━━━━━━━━━━━━━━`,
                 `${tierIcon} Loại PMH: ${displayName} (${normType})`,
                 `📉 Số lượng còn lại: ${remaining} mã!`,
-                `⚡ Cảnh báo: ${tierTitle}`,
-                `━━━━━━━━━━━━━━━━━━━━━`,
-                `👉 Quản lý vui lòng xin phiếu hoặc kiểm tra tồn trước khi tư vấn!`
-            ].join(NL);
+                `⚡ Cảnh báo: ${tierTitle}`
+            ];
+
+            if (forecast && forecast.text) {
+                alertLines.push(`⏱️ ${forecast.text}`);
+            }
+
+            alertLines.push(`━━━━━━━━━━━━━━━━━━━━━`);
+            alertLines.push(`👉 Quản lý vui lòng kiểm tra tồn hoặc xin trước khi tư vấn!`);
+
+            const alertMessage = alertLines.join(NL);
 
             const targets = new Set();
 
@@ -521,6 +531,288 @@ const couponService = {
         ];
 
         return lines.join(NL);
+    },
+
+    /**
+     * Phân tích tốc độ tiêu thụ và dự báo thời gian cạn kho PMH
+     * Dựa trên dữ liệu 2 giờ gần nhất
+     */
+    async calculateDepletionForecast(loaiPMH, remainingCount = null) {
+        try {
+            if (!loaiPMH) return null;
+            const normType = String(loaiPMH).trim().toUpperCase();
+
+            let remaining = remainingCount;
+            if (remaining === null) {
+                remaining = await Firebase.getUnusedCountByType(normType);
+            }
+
+            const requests = await Firebase.getRequests();
+            const now = Date.now();
+            const twoHoursAgo = now - (2 * 60 * 60 * 1000);
+
+            // Đếm số lượng mã của loại này được phát trong 2 giờ gần nhất
+            const recentIssued = requests.filter(r => {
+                if (String(r.loaiPMH || '').trim().toUpperCase() !== normType) return false;
+                if (r.status !== CONFIG.REQUEST_STATUS_SENT && r.status !== 'SENT' && r.status !== 'Đã phát mã') return false;
+                const reqTime = new Date(r.createdAt || r.updatedAt || 0).getTime();
+                return reqTime >= twoHoursAgo;
+            });
+
+            const countIn2Hours = recentIssued.length;
+            // Tốc độ cấp (mã/giờ)
+            const speedPerHour = Math.round((countIn2Hours / 2) * 10) / 10;
+
+            if (speedPerHour <= 0) {
+                return {
+                    speedPerHour: 0,
+                    minutesLeft: null,
+                    text: null
+                };
+            }
+
+            if (remaining <= 0) {
+                return {
+                    speedPerHour,
+                    minutesLeft: 0,
+                    text: `⚡ Tốc độ cấp: ${speedPerHour} mã/giờ. Kho ${normType} đã CẠN SẠCH mã!`
+                };
+            }
+
+            // Thời gian cạn kho (phút)
+            const minutesLeft = Math.round((remaining / speedPerHour) * 60);
+            let timeStr = '';
+            if (minutesLeft < 60) {
+                timeStr = `${minutesLeft} phút`;
+            } else {
+                const hours = Math.floor(minutesLeft / 60);
+                const mins = minutesLeft % 60;
+                timeStr = mins > 0 ? `${hours} giờ ${mins} phút` : `${hours} giờ`;
+            }
+
+            const text = `⚡ Tốc độ cấp: ${speedPerHour} mã/giờ. Dự kiến kho ${normType} sẽ cạn sạch sau ${timeStr} nữa. Quản lý vui lòng kiểm tra tồn hoặc xin trước khi tư vấn!`;
+
+            return {
+                speedPerHour,
+                minutesLeft,
+                timeStr,
+                text
+            };
+        } catch (e) {
+            console.error('[couponService] Lỗi calculateDepletionForecast:', e.message);
+            return null;
+        }
+    },
+
+    /**
+     * Tra cứu lịch sử & trạng thái chi tiết của 1 Đơn Hàng (MĐH)
+     */
+    async lookupOrderDetails(mdh) {
+        if (!mdh) return { found: false, message: 'Vui lòng nhập Mã đơn hàng cần tra cứu.' };
+
+        const cleanMdh = (val) => String(val || '').replace(/[\s\r\n\t]+/g, '').toUpperCase();
+        const normMdh = cleanMdh(mdh);
+        if (!normMdh) return { found: false, message: 'Mã đơn hàng không hợp lệ.' };
+
+        const requests = await Firebase.getRequests();
+        const coupons = await Firebase.getCoupons();
+
+        // 1. Tìm tất cả các yêu cầu liên quan đến MĐH này
+        const matchedRequests = requests.filter(r => cleanMdh(r.mdh) === normMdh);
+
+        // 2. Tìm tất cả các coupon đang hoặc đã gắn với MĐH này
+        const matchedCoupons = coupons.filter(c => cleanMdh(c.orderId) === normMdh);
+
+        if (matchedRequests.length === 0 && matchedCoupons.length === 0) {
+            return {
+                found: false,
+                mdh: normMdh,
+                message: `❌ Không tìm thấy thông tin nào cho Mã đơn hàng "${normMdh}".\n👉 Vui lòng kiểm tra lại chính xác mã đơn hàng!`
+            };
+        }
+
+        // Lấy đơn yêu cầu mới nhất làm đại diện
+        const latestReq = matchedRequests[matchedRequests.length - 1] || {};
+        const firstReq = matchedRequests[0] || {};
+
+        const displayName = latestReq.displayName || firstReq.displayName || (matchedCoupons[0]?.recipient) || 'Quản lý';
+        const maKho = latestReq.maKho || firstReq.maKho || (matchedCoupons[0]?.warehouse) || '-';
+        const loaiPMH = latestReq.loaiPMH || firstReq.loaiPMH || (matchedCoupons[0]?.type) || 'PMH';
+
+        // Lấy mã PMH hiện tại có hiệu lực
+        let currentCode = latestReq.couponCode || '';
+        if (!currentCode && matchedCoupons.length > 0) {
+            const activeCoupon = matchedCoupons.find(c => c.status === 'SENT' || c.status === CONFIG.COUPON_STATUS_SENT);
+            if (activeCoupon) currentCode = activeCoupon.code;
+        }
+
+        // Trạng thái đơn hàng
+        const status = latestReq.status || (currentCode ? 'Đã phát mã' : 'Chưa cấp mã');
+
+        // Định dạng thời gian
+        const timeFormatter = new Intl.DateTimeFormat('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            hour: '2-digit',
+            minute: '2-digit',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour12: false
+        });
+
+        let issuedTime = '--:--';
+        try {
+            const t = latestReq.createdAt || latestReq.updatedAt || matchedCoupons[0]?.sentAt || matchedCoupons[0]?.updatedAt;
+            if (t) issuedTime = timeFormatter.format(new Date(t));
+        } catch (e) {}
+
+        const approvedBy = latestReq.approvedBy || (latestReq.isReplaced ? 'BOT_AUTO_REPLACE' : 'Quản trị viên');
+
+        // Kiểm tra lịch sử đổi mã / thu hồi
+        let isReplaced = !!latestReq.isReplaced;
+        let oldCode = latestReq.oldCode || '';
+        let oldType = latestReq.oldType || loaiPMH;
+        let oldTime = latestReq.oldTime || '';
+
+        // Nếu có nhiều hơn 1 yêu cầu thành công hoặc đơn trước bị đổi mã
+        if (!isReplaced && matchedRequests.length > 1) {
+            const sentReqs = matchedRequests.filter(r => r.status === CONFIG.REQUEST_STATUS_SENT || r.status === 'SENT' || r.status === 'Đã phát mã');
+            if (sentReqs.length > 1) {
+                isReplaced = true;
+                oldCode = sentReqs[0].couponCode;
+                oldType = sentReqs[0].loaiPMH || loaiPMH;
+                try {
+                    oldTime = timeFormatter.format(new Date(sentReqs[0].createdAt || sentReqs[0].updatedAt));
+                } catch (e) {
+                    oldTime = 'trước đó';
+                }
+            }
+        }
+
+        return {
+            found: true,
+            mdh: normMdh,
+            displayName,
+            maKho,
+            loaiPMH,
+            currentCode,
+            status,
+            issuedTime,
+            approvedBy,
+            isReplaced,
+            oldCode,
+            oldType,
+            oldTime
+        };
+    },
+
+    /**
+     * Báo cáo kết xuất đối soát toàn diện gửi tin nhắn riêng cho Admin hàng ngày
+     */
+    async generateAdminDailyAuditReport() {
+        const requests = await Firebase.getRequests();
+        const coupons = await Firebase.getCoupons();
+        const now = new Date();
+
+        const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const todayStr = dateFormatter.format(now); // "YYYY-MM-DD"
+
+        const displayDateFormatter = new Intl.DateTimeFormat('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+        const todayDisplay = displayDateFormatter.format(now);
+
+        // 1. Lọc đơn phát trong ngày
+        const todaySentReqs = requests.filter(r => {
+            if (r.status !== CONFIG.REQUEST_STATUS_SENT && r.status !== 'SENT' && r.status !== 'Đã phát mã') return false;
+            if (!r.couponCode) return false;
+            const reqDate = new Date(r.createdAt || r.updatedAt || 0);
+            try {
+                return dateFormatter.format(reqDate) === todayStr;
+            } catch (e) {
+                return false;
+            }
+        });
+
+        // 2. Thống kê theo loại PMH
+        const countByType = {};
+        const countByStore = {};
+        const swappedOrders = [];
+
+        todaySentReqs.forEach(r => {
+            const type = String(r.loaiPMH || 'KHAC').trim().toUpperCase();
+            countByType[type] = (countByType[type] || 0) + 1;
+
+            const store = String(r.maKho || 'Chưa rõ').trim();
+            countByStore[store] = (countByStore[store] || 0) + 1;
+
+            if (r.isReplaced && r.oldCode) {
+                swappedOrders.push(r);
+            }
+        });
+
+        const typeSummary = Object.entries(countByType)
+            .sort((a, b) => b[1] - a[1])
+            .map(([t, c]) => `• ${t}: ${c} mã`)
+            .join('\n');
+
+        const topStores = Object.entries(countByStore)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([s, c], idx) => `${idx + 1}. Kho ${s}: ${c} mã`)
+            .join('\n');
+
+        // 3. Danh sách chi tiết các đơn THU HỒI / ĐỔI MÃ
+        let swapSection = '• Không có đơn đổi/thu hồi nào trong ngày.';
+        if (swappedOrders.length > 0) {
+            swapSection = swappedOrders.map((r, idx) => {
+                return `${idx + 1}. MĐH: ${r.mdh || '-'}\n   - Quản lý: ${r.displayName || 'Quản lý'} (Kho ${r.maKho || '-'})\n   - Đã thu hồi: "${r.oldCode}" ➜ Cấp mới: "${r.couponCode}"\n   - Thu hồi lúc: ${r.oldTime || '--:--'}`;
+            }).join('\n');
+        }
+
+        // 4. Thống kê tồn kho hiện tại
+        const stockCounts = {};
+        coupons.forEach(c => {
+            if (c && c.status === 'UNUSED' && c.type) {
+                const t = String(c.type).trim().toUpperCase();
+                stockCounts[t] = (stockCounts[t] || 0) + 1;
+            }
+        });
+        const stockSummary = Object.entries(stockCounts)
+            .sort((a, b) => a[1] - b[1])
+            .map(([t, c]) => `• ${t}: ${c} mã${c < 10 ? ' 🔴' : (c < 30 ? ' 🟡' : '')}`)
+            .join('\n');
+
+        return [
+            `👑 BÁO CÁO ĐỐI SOÁT CUỐI NGÀY DÀNH CHO ADMIN`,
+            `📅 Ngày báo cáo: ${todayDisplay}`,
+            `━━━━━━━━━━━━━━━━━━━━━`,
+            `📊 TỔNG QUAN PHÁT MÃ:`,
+            `• Tổng mã đã phát hôm nay: ${todaySentReqs.length} mã`,
+            `• Tổng số đơn thu hồi / cấp lại: ${swappedOrders.length} đơn`,
+            ``,
+            `🏷️ CHI TIẾT THEO LOẠI PMH:`,
+            typeSummary || '• Chưa phát sinh mã nào.',
+            ``,
+            `🔄 DANH SÁCH ĐƠN THU HỒI & ĐỔI MÃ:`,
+            swapSection,
+            ``,
+            `🏢 TOP SIÊU THỊ XIN NHIỀU NHẤT:`,
+            topStores || '• Chưa có số liệu.',
+            ``,
+            `📦 TỒN KHO HIỆN TẠI:`,
+            stockSummary || '• Kho PMH hiện tại trống.',
+            `━━━━━━━━━━━━━━━━━━━━━`,
+            `💡 Báo cáo tự động lúc 22:15 hàng ngày. Admin có thể gõ "bcaoadmin" để lấy báo cáo tức thì.`
+        ].join('\n');
     }
 };
 

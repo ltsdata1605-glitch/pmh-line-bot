@@ -1,6 +1,6 @@
 {
   "name": "pmh-line-bot",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "LINE Bot phát mã PMH và hệ thống quản lý kho Coupon siêu tốc kết nối Firebase",
   "main": "server.js",
   "scripts": {

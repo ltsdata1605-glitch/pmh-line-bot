@@ -219,9 +219,18 @@ function setLoggedIn(userId) {
     renderDashboard();
     renderCouponsTable();
     updateTypeDropdowns();
+
+    // Khởi tạo luồng dữ liệu Live Realtime (SSE)
+    initRealtimeEventStream();
 }
 
 function handleLogout() {
+    if (realtimeEventSource) {
+        try {
+            realtimeEventSource.close();
+        } catch (e) {}
+        realtimeEventSource = null;
+    }
     sessionStorage.removeItem('pmh_auth_user');
     localStorage.removeItem('pmh_auth_user');
     appState.currentUser = null;
@@ -1471,17 +1480,19 @@ function updateFirebaseStatusBadge(isLive) {
 
 function showSyncing(isSyncing) {
     const text = document.getElementById('sync-status-text');
-    const dot = document.querySelector('.status-dot');
+    const dot = document.getElementById('sync-status-dot') || document.querySelector('.status-dot');
     if (!text || !dot) return;
 
     if (isSyncing) {
         text.innerText = 'Đang đồng bộ...';
+        dot.className = 'status-dot online';
         dot.style.background = 'var(--warning)';
         dot.style.boxShadow = '0 0 8px var(--warning)';
     } else {
-        text.innerText = 'Đã đồng bộ';
+        text.innerText = 'Live Realtime';
+        dot.className = 'status-dot online pulse';
         dot.style.background = 'var(--success)';
-        dot.style.boxShadow = '0 0 8px var(--success)';
+        dot.style.boxShadow = '';
     }
 }
 
@@ -1616,9 +1627,12 @@ function copyBotCodeSnippet() {
     });
 }
 
-// ==================== 13. TOAST NOTIFICATIONS & HELPERS ====================
-function showToast(message, type = 'info') {
+// ==================== 13. TOAST NOTIFICATIONS & REALTIME HUB ====================
+let realtimeEventSource = null;
+
+function showToast(message, type = 'info', duration = 3800) {
     const container = document.getElementById('toast-container');
+    if (!container) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
 
@@ -1627,7 +1641,7 @@ function showToast(message, type = 'info') {
     if (type === 'error') icon = 'fa-circle-xmark';
     if (type === 'warning') icon = 'fa-triangle-exclamation';
 
-    toast.innerHTML = `<i class="fa-solid ${icon}"></i><span>${message}</span>`;
+    toast.innerHTML = `<i class="fa-solid ${icon}"></i><div class="toast-body">${message}</div>`;
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -1635,7 +1649,116 @@ function showToast(message, type = 'info') {
         toast.style.transform = 'translateY(10px)';
         toast.style.transition = 'all 200ms ease';
         setTimeout(() => toast.remove(), 200);
-    }, 3500);
+    }, duration);
+}
+
+function updateRealtimeIndicator(connected) {
+    const dot = document.getElementById('sync-status-dot') || document.querySelector('.status-dot');
+    const text = document.getElementById('sync-status-text');
+    if (!dot || !text) return;
+
+    if (connected) {
+        dot.className = 'status-dot online pulse';
+        dot.style.background = 'var(--success)';
+        dot.style.boxShadow = '';
+        text.innerText = 'Live Realtime';
+    } else {
+        dot.className = 'status-dot offline';
+        dot.style.background = 'var(--danger)';
+        dot.style.boxShadow = '0 0 6px rgba(220, 38, 38, 0.4)';
+        text.innerText = 'Mất kết nối';
+    }
+}
+
+function initRealtimeEventStream() {
+    if (realtimeEventSource) {
+        try {
+            realtimeEventSource.close();
+        } catch (e) {}
+        realtimeEventSource = null;
+    }
+
+    if (typeof EventSource === 'undefined') {
+        console.warn('[Realtime] Trình duyệt không hỗ trợ Server-Sent Events');
+        return;
+    }
+
+    try {
+        realtimeEventSource = new EventSource('/api/realtime/stream');
+
+        realtimeEventSource.onopen = () => {
+            console.log('[Realtime] Đã kết nối SSE Server thành công!');
+            updateRealtimeIndicator(true);
+        };
+
+        // Khi có đơn hàng phát mã thành công (tự động phát hoặc admin duyệt)
+        realtimeEventSource.addEventListener('coupon_sent', (e) => {
+            try {
+                const payload = JSON.parse(e.data);
+                const info = payload.data || {};
+                console.log('[Realtime] Sự kiện coupon_sent:', info);
+
+                // Tự động nhảy số tồn kho & cập nhật bảng mã ngay lập tức
+                syncDataFromFirebase(false);
+
+                // Hiển thị Popup Toast thông báo đơn mới được cấp
+                const actionTitle = info.isReplaced ? '🔄 Đổi & Cấp Lại Mã Mới' : '⚡ Phát Mã PMH Thành Công';
+                const content = `
+                    <div style="font-weight: 700; font-size: 0.95rem; color: #065F46;">${actionTitle}</div>
+                    <div style="font-size: 0.85rem; line-height: 1.4; margin-top: 2px;">
+                        • MĐH: <span style="font-family: monospace; font-weight: 600;">${info.mdh || info.orderId || '-'}</span> (${info.maKho || 'Kho'})<br>
+                        • Khách: <b>${info.recipient || 'Nhân viên'}</b> | Loại: <b>${info.loaiPMH || '-'}</b><br>
+                        • Mã cấp: <span style="font-family: monospace; font-weight: 700; color: #047857;">${info.code || '-'}</span>
+                    </div>
+                `;
+                showToast(content, 'success', 5000);
+            } catch (err) {
+                console.error('[Realtime] Lỗi xử lý coupon_sent:', err);
+            }
+        });
+
+        // Khi có đơn hàng mới đang chờ Admin duyệt
+        realtimeEventSource.addEventListener('request_pending', (e) => {
+            try {
+                const payload = JSON.parse(e.data);
+                const info = payload.data || {};
+                console.log('[Realtime] Sự kiện request_pending:', info);
+
+                syncDataFromFirebase(false);
+
+                const content = `
+                    <div style="font-weight: 700; font-size: 0.95rem; color: #92400E;">⏳ Có Đơn Hàng Mới Chờ Duyệt</div>
+                    <div style="font-size: 0.85rem; line-height: 1.4; margin-top: 2px;">
+                        • MĐH: <span style="font-family: monospace; font-weight: 600;">${info.mdh || info.orderId || '-'}</span> (${info.maKho || 'Kho'})<br>
+                        • Người xin: <b>${info.displayName || 'Nhân viên'}</b> | PMH: <b>${info.loaiPMH || '-'}</b>
+                    </div>
+                `;
+                showToast(content, 'warning', 6000);
+            } catch (err) {
+                console.error('[Realtime] Lỗi xử lý request_pending:', err);
+            }
+        });
+
+        // Khi có mã bị thu hồi
+        realtimeEventSource.addEventListener('coupon_revoked', (e) => {
+            try {
+                const payload = JSON.parse(e.data);
+                const info = payload.data || {};
+                syncDataFromFirebase(false);
+                showToast(`ℹ️ Đã thu hồi mã: <b>${info.code || ''}</b>`, 'info', 4000);
+            } catch (err) {
+                console.error('[Realtime] Lỗi xử lý coupon_revoked:', err);
+            }
+        });
+
+        realtimeEventSource.onerror = (err) => {
+            console.warn('[Realtime] Mất kết nối SSE stream, tự động kết nối lại...', err);
+            updateRealtimeIndicator(false);
+        };
+    } catch (e) {
+        console.warn('[Realtime] Lỗi khởi tạo EventSource:', e);
+        updateRealtimeIndicator(false);
+    }
 }
 
 function formatDate(dateStr) {

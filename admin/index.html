@@ -145,9 +145,9 @@
                     <p class="page-desc" id="page-desc">Theo dõi tồn kho coupon và trạng thái dữ liệu theo thời gian thực</p>
                 </div>
                 <div class="top-bar-right">
-                    <div class="sync-status" id="sync-status-indicator">
-                        <span class="status-dot online"></span>
-                        <span id="sync-status-text">Đã đồng bộ</span>
+                    <div class="sync-status" id="sync-status-indicator" title="Kết nối Live Realtime (Server-Sent Events) tự động nhảy số không cần F5">
+                        <span class="status-dot online pulse" id="sync-status-dot"></span>
+                        <span id="sync-status-text">Live Realtime</span>
                     </div>
                     <button class="btn btn-secondary btn-sm" onclick="syncDataFromFirebase(true)">
                         <i class="fa-solid fa-rotate"></i>

@@ -11,51 +11,68 @@ const lineClient = {
     /**
      * Bàn phím nút bấm thao tác nhanh (Quick Reply Menu) cho chat 1-1 với BOT
      */
-    getQuickReplyMenu() {
-        return {
-            items: [
+    /**
+     * Bàn phím nút bấm thao tác nhanh (Quick Reply Menu) cho chat 1-1 với BOT
+     * Gồm 6 phím tương tác 1 chạm: Cú pháp, Tồn kho, Lịch sử, Tra cứu MĐH, Quyền Admin, Web Quản trị
+     */
+    getQuickReplyMenu(isAdmin = false) {
+        const items = [
+            {
+                type: 'action',
+                action: {
+                    type: 'message',
+                    label: '📋 Lấy Form (cp)',
+                    text: 'cp'
+                }
+            },
+            {
+                type: 'action',
+                action: {
+                    type: 'message',
+                    label: '📊 Tồn Kho (tk)',
+                    text: 'tk'
+                }
+            },
+            {
+                type: 'action',
+                action: {
+                    type: 'message',
+                    label: '📜 Lịch Sử (ls)',
+                    text: 'ls'
+                }
+            },
+            {
+                type: 'action',
+                action: {
+                    type: 'message',
+                    label: '🔍 Tra Cứu MĐH',
+                    text: 'check '
+                }
+            }
+        ];
+
+        if (isAdmin) {
+            items.push(
                 {
                     type: 'action',
                     action: {
                         type: 'message',
-                        label: '📋 Lấy mẫu form (cp)',
-                        text: 'cp'
+                        label: '👑 Quyền Admin',
+                        text: 'admin'
                     }
                 },
                 {
                     type: 'action',
                     action: {
                         type: 'message',
-                        label: '📊 Xem tồn kho (tk)',
-                        text: 'tk'
-                    }
-                },
-                {
-                    type: 'action',
-                    action: {
-                        type: 'message',
-                        label: '📜 Lịch sử hôm nay (ls)',
-                        text: 'ls'
-                    }
-                },
-                {
-                    type: 'action',
-                    action: {
-                        type: 'message',
-                        label: '📚 Tất cả lịch sử (lsall)',
-                        text: 'lsall'
-                    }
-                },
-                {
-                    type: 'action',
-                    action: {
-                        type: 'message',
-                        label: '❓ Hướng dẫn (hd)',
-                        text: 'hd'
+                        label: '🌐 Web Quản Trị',
+                        text: 'web'
                     }
                 }
-            ]
-        };
+            );
+        }
+
+        return { items };
     },
 
     /**
@@ -292,6 +309,398 @@ const lineClient = {
                 layout: 'vertical',
                 paddingAll: '14px',
                 contents: bodyContents
+            }
+        };
+    },
+
+    /**
+     * Tạo Thẻ Flex Menu 6 ô tương tác 1 chạm (Trải nghiệm người dùng cao cấp)
+     */
+    createMainMenuFlexCard(isAdmin = false) {
+        return {
+            type: 'bubble',
+            size: 'mega',
+            header: {
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: '#312E81',
+                paddingAll: '16px',
+                contents: [
+                    {
+                        type: 'text',
+                        text: '⚡ MENU TIỆN ÍCH 1 CHẠM',
+                        weight: 'bold',
+                        color: '#FFFFFF',
+                        size: 'md'
+                    },
+                    {
+                        type: 'text',
+                        text: 'Hệ thống Quản lý & Cấp mã PMH Siêu tốc',
+                        color: '#C7D2FE',
+                        size: 'xxs',
+                        margin: 'xs'
+                    }
+                ]
+            },
+            body: {
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'md',
+                paddingAll: '16px',
+                contents: [
+                    // Hàng 1: Form & Tồn kho
+                    {
+                        type: 'box',
+                        layout: 'horizontal',
+                        spacing: 'md',
+                        contents: [
+                            {
+                                type: 'box',
+                                layout: 'vertical',
+                                backgroundColor: '#EEF2FF',
+                                cornerRadius: 'md',
+                                paddingAll: '12px',
+                                flex: 1,
+                                action: { type: 'message', label: 'Lấy Cú Pháp', text: 'cp' },
+                                contents: [
+                                    { type: 'text', text: '📋', size: 'lg', align: 'center' },
+                                    { type: 'text', text: 'Lấy Cú Pháp', size: 'xs', weight: 'bold', color: '#4338CA', align: 'center', margin: 'xs' },
+                                    { type: 'text', text: 'Mẫu form đăng ký', size: 'xxs', color: '#6B7280', align: 'center' }
+                                ]
+                            },
+                            {
+                                type: 'box',
+                                layout: 'vertical',
+                                backgroundColor: '#ECFDF5',
+                                cornerRadius: 'md',
+                                paddingAll: '12px',
+                                flex: 1,
+                                action: { type: 'message', label: 'Tồn Kho', text: 'tk' },
+                                contents: [
+                                    { type: 'text', text: '📊', size: 'lg', align: 'center' },
+                                    { type: 'text', text: 'Tồn Kho PMH', size: 'xs', weight: 'bold', color: '#059669', align: 'center', margin: 'xs' },
+                                    { type: 'text', text: 'Kiểm tra số lượng', size: 'xxs', color: '#6B7280', align: 'center' }
+                                ]
+                            }
+                        ]
+                    },
+                    // Hàng 2: Lịch sử & Tra cứu MĐH
+                    {
+                        type: 'box',
+                        layout: 'horizontal',
+                        spacing: 'md',
+                        contents: [
+                            {
+                                type: 'box',
+                                layout: 'vertical',
+                                backgroundColor: '#FEF3C7',
+                                cornerRadius: 'md',
+                                paddingAll: '12px',
+                                flex: 1,
+                                action: { type: 'message', label: 'Lịch Sử', text: 'ls' },
+                                contents: [
+                                    { type: 'text', text: '📜', size: 'lg', align: 'center' },
+                                    { type: 'text', text: 'Lịch Sử Hôm Nay', size: 'xs', weight: 'bold', color: '#D97706', align: 'center', margin: 'xs' },
+                                    { type: 'text', text: 'Mã đã nhận trong ngày', size: 'xxs', color: '#6B7280', align: 'center' }
+                                ]
+                            },
+                            {
+                                type: 'box',
+                                layout: 'vertical',
+                                backgroundColor: '#F0FDF4',
+                                cornerRadius: 'md',
+                                paddingAll: '12px',
+                                flex: 1,
+                                action: { type: 'message', label: 'Tra Cứu MĐH', text: 'check ' },
+                                contents: [
+                                    { type: 'text', text: '🔍', size: 'lg', align: 'center' },
+                                    { type: 'text', text: 'Tra Cứu MĐH', size: 'xs', weight: 'bold', color: '#0D9488', align: 'center', margin: 'xs' },
+                                    { type: 'text', text: 'Kiểm tra trạng thái đơn', size: 'xxs', color: '#6B7280', align: 'center' }
+                                ]
+                            }
+                        ]
+                    },
+                    // Hàng 3: Quyền Admin & Web Quản Trị
+                    {
+                        type: 'box',
+                        layout: 'horizontal',
+                        spacing: 'md',
+                        contents: [
+                            {
+                                type: 'box',
+                                layout: 'vertical',
+                                backgroundColor: '#FDF2F8',
+                                cornerRadius: 'md',
+                                paddingAll: '12px',
+                                flex: 1,
+                                action: { type: 'message', label: 'Admin', text: 'admin' },
+                                contents: [
+                                    { type: 'text', text: '👑', size: 'lg', align: 'center' },
+                                    { type: 'text', text: 'Quyền Admin', size: 'xs', weight: 'bold', color: '#DB2777', align: 'center', margin: 'xs' },
+                                    { type: 'text', text: isAdmin ? 'Đang kích hoạt 🟢' : 'Chỉ dành cho Admin', size: 'xxs', color: '#6B7280', align: 'center' }
+                                ]
+                            },
+                            {
+                                type: 'box',
+                                layout: 'vertical',
+                                backgroundColor: '#F5F3FF',
+                                cornerRadius: 'md',
+                                paddingAll: '12px',
+                                flex: 1,
+                                action: { type: 'message', label: 'Web Quản Trị', text: 'web' },
+                                contents: [
+                                    { type: 'text', text: '🌐', size: 'lg', align: 'center' },
+                                    { type: 'text', text: 'Web Quản Trị', size: 'xs', weight: 'bold', color: '#7C3AED', align: 'center', margin: 'xs' },
+                                    { type: 'text', text: isAdmin ? 'Mở Dashboard 🔗' : 'Chỉ dành cho Admin', size: 'xxs', color: '#6B7280', align: 'center' }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            footer: {
+                type: 'box',
+                layout: 'vertical',
+                paddingAll: '10px',
+                contents: [
+                    {
+                        type: 'text',
+                        text: '💡 Chạm trực tiếp vào từng ô hoặc phím bên dưới để thao tác nhanh',
+                        size: 'xxs',
+                        color: '#94A3B8',
+                        align: 'center'
+                    }
+                ]
+            }
+        };
+    },
+
+    /**
+     * Tạo Thẻ Flex Card Tra cứu Đơn Hàng (Chi tiết hành trình & mã PMH)
+     */
+    createOrderLookupFlexCard({
+        mdh,
+        maKho,
+        displayName,
+        loaiPMH,
+        currentCode,
+        status,
+        issuedTime,
+        approvedBy,
+        isReplaced = false,
+        oldCode = '',
+        oldType = '',
+        oldTime = ''
+    }) {
+        const isSwapped = !!isReplaced && !!oldCode;
+        const isOutOfStock = status === 'Hết mã';
+        const isPending = status === 'Chờ duyệt đơn';
+
+        let statusBadgeColor = '#16A34A';
+        let statusBadgeBg = '#DCFCE7';
+        let statusTitle = '✅ ĐÃ CẤP MÃ';
+
+        if (isSwapped) {
+            statusBadgeColor = '#D97706';
+            statusBadgeBg = '#FEF3C7';
+            statusTitle = '🔄 ĐÃ ĐỔI MÃ MỚI';
+        } else if (isOutOfStock) {
+            statusBadgeColor = '#DC2626';
+            statusBadgeBg = '#FEE2E2';
+            statusTitle = '❌ HẾT MÃ';
+        } else if (isPending) {
+            statusBadgeColor = '#4B5563';
+            statusBadgeBg = '#F3F4F6';
+            statusTitle = '⏳ ĐANG CHỜ DUYỆT';
+        }
+
+        const bodyContents = [
+            // Thông tin quản lý & mã kho
+            {
+                type: 'box',
+                layout: 'baseline',
+                spacing: 'sm',
+                contents: [
+                    { type: 'text', text: '👤 Quản lý:', size: 'xs', color: '#64748B', flex: 3 },
+                    { type: 'text', text: String(displayName || 'Quản lý'), size: 'xs', weight: 'bold', color: '#1E293B', flex: 7 }
+                ]
+            },
+            {
+                type: 'box',
+                layout: 'baseline',
+                spacing: 'sm',
+                margin: 'xs',
+                contents: [
+                    { type: 'text', text: '🏢 Siêu thị:', size: 'xs', color: '#64748B', flex: 3 },
+                    { type: 'text', text: `Kho ${maKho || '-'}`, size: 'xs', color: '#334155', weight: 'bold', flex: 7 }
+                ]
+            },
+            {
+                type: 'box',
+                layout: 'baseline',
+                spacing: 'sm',
+                margin: 'xs',
+                contents: [
+                    { type: 'text', text: '🏷️ Loại PMH:', size: 'xs', color: '#64748B', flex: 3 },
+                    { type: 'text', text: String(loaiPMH || 'PMH'), size: 'xs', color: '#4338CA', weight: 'bold', flex: 7 }
+                ]
+            },
+            {
+                type: 'separator',
+                margin: 'md'
+            },
+            // Thẻ mã PMH hiện tại
+            {
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: '#F8FAFC',
+                borderWidth: '1px',
+                borderColor: '#CBD5E1',
+                cornerRadius: 'md',
+                paddingAll: '12px',
+                margin: 'md',
+                alignItems: 'center',
+                contents: [
+                    {
+                        type: 'text',
+                        text: 'MÃ PMH CỦA ĐƠN HÀNG:',
+                        size: 'xxs',
+                        color: '#64748B',
+                        weight: 'bold'
+                    },
+                    {
+                        type: 'text',
+                        text: String(currentCode || 'CHƯA CẤP MÃ').trim(),
+                        size: 'xl',
+                        weight: 'bold',
+                        color: '#0F172A',
+                        margin: 'xs'
+                    },
+                    {
+                        type: 'text',
+                        text: `Cấp lúc: ${issuedTime || '--:--'} • Duyệt bởi: ${approvedBy || 'Hệ thống'}`,
+                        size: 'xxs',
+                        color: '#94A3B8',
+                        margin: 'xs'
+                    }
+                ]
+            }
+        ];
+
+        // Nếu đã từng bị thu hồi đổi mã mới -> Thêm box lịch sử thu hồi
+        if (isSwapped) {
+            bodyContents.push({
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: '#FEF2F2',
+                cornerRadius: 'md',
+                paddingAll: '10px',
+                margin: 'md',
+                contents: [
+                    {
+                        type: 'text',
+                        text: '⚠️ LỊCH SỬ THU HỒI & ĐỔI MÃ:',
+                        size: 'xxs',
+                        weight: 'bold',
+                        color: '#B91C1C'
+                    },
+                    {
+                        type: 'text',
+                        text: `• Mã ban đầu: "${oldCode}" (${oldType || loaiPMH})`,
+                        size: 'xxs',
+                        color: '#7F1D1D',
+                        margin: 'xs'
+                    },
+                    {
+                        type: 'text',
+                        text: `• Đã thu hồi lúc: ${oldTime || 'trước đó'}`,
+                        size: 'xxs',
+                        color: '#7F1D1D'
+                    },
+                    {
+                        type: 'text',
+                        text: `• Mã mới hiện tại: "${currentCode}"`,
+                        size: 'xxs',
+                        weight: 'bold',
+                        color: '#15803D'
+                    }
+                ]
+            });
+        }
+
+        return {
+            type: 'bubble',
+            size: 'mega',
+            header: {
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: '#4338CA',
+                paddingAll: '14px',
+                contents: [
+                    {
+                        type: 'box',
+                        layout: 'horizontal',
+                        alignItems: 'center',
+                        contents: [
+                            {
+                                type: 'text',
+                                text: '🔍 THÔNG TIN ĐƠN HÀNG',
+                                color: '#FFFFFF',
+                                weight: 'bold',
+                                size: 'sm',
+                                flex: 7
+                            },
+                            {
+                                type: 'box',
+                                layout: 'vertical',
+                                backgroundColor: statusBadgeBg,
+                                cornerRadius: 'sm',
+                                paddingStart: '6px',
+                                paddingEnd: '6px',
+                                paddingTop: '2px',
+                                paddingBottom: '2px',
+                                flex: 4,
+                                contents: [
+                                    {
+                                        type: 'text',
+                                        text: statusTitle,
+                                        color: statusBadgeColor,
+                                        size: 'xxs',
+                                        weight: 'bold',
+                                        align: 'center'
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        type: 'text',
+                        text: `MĐH: ${mdh || '-'}`,
+                        color: '#E0E7FF',
+                        size: 'xs',
+                        margin: 'xs'
+                    }
+                ]
+            },
+            body: {
+                type: 'box',
+                layout: 'vertical',
+                paddingAll: '14px',
+                contents: bodyContents
+            },
+            footer: {
+                type: 'box',
+                layout: 'vertical',
+                paddingAll: '8px',
+                contents: [
+                    {
+                        type: 'text',
+                        text: '💡 Gõ "ls" để xem tất cả lịch sử nhận mã hôm nay của bạn',
+                        size: 'xxs',
+                        color: '#94A3B8',
+                        align: 'center'
+                    }
+                ]
             }
         };
     },

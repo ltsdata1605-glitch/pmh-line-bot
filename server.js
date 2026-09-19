@@ -6,6 +6,7 @@ const { handleLineEvent } = require('./src/botHandler');
 const { setupCronJobs, executeSchedule, broadcastMessage } = require('./src/cronJobs');
 const lineClient = require('./src/lineClient');
 const Firebase = require('./src/firebase');
+const realtimeHub = require('./src/realtimeHub');
 
 const app = express();
 
@@ -23,12 +24,41 @@ app.get('/api/health', async (req, res) => {
     const syntax = await Firebase.getSyntax();
     res.json({
         status: 'OK',
-        version: '1.2.0',
+        version: '1.3.0',
         botName: 'DM_Tây Nam Bộ',
         tokenPrefix: CONFIG.CHANNEL_ACCESS_TOKEN.slice(0, 10),
         service: 'PMH LINE BOT & Web Admin',
         firebaseConnected: !!syntax,
+        realtimeClients: realtimeHub.getClientCount(),
         timestamp: new Date().toISOString()
+    });
+});
+
+// 2.0 Server-Sent Events (SSE) Realtime Stream cho Web Admin
+app.get('/api/realtime/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Tắt buffering proxy Render / Nginx
+
+    res.write(`data: ${JSON.stringify({ event: 'connected', timestamp: new Date().toISOString() })}\n\n`);
+
+    realtimeHub.addClient(res);
+    console.log(`[Realtime] Web Admin connected (active: ${realtimeHub.getClientCount()})`);
+
+    // Heartbeat định kỳ 20s tránh ngắt kết nối HTTP
+    const heartbeatTimer = setInterval(() => {
+        try {
+            res.write(': heartbeat\n\n');
+        } catch (e) {
+            clearInterval(heartbeatTimer);
+        }
+    }, 20000);
+
+    req.on('close', () => {
+        clearInterval(heartbeatTimer);
+        realtimeHub.removeClient(res);
+        console.log(`[Realtime] Web Admin disconnected (active: ${realtimeHub.getClientCount()})`);
     });
 });
 

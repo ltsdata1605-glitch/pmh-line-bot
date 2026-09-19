@@ -3,6 +3,7 @@ const Firebase = require('./firebase');
 const lineClient = require('./lineClient');
 const { parseCouponForm, looksLikeCouponForm } = require('./parser');
 const couponService = require('./couponService');
+const realtimeHub = require('./realtimeHub');
 
 const NL = '\n';
 
@@ -331,7 +332,119 @@ async function handleLineEvent(event) {
         return;
     }
 
-    // 1.4 Hỗ trợ lọc danh sách phát mã của Quản lý (Chuyển tiếp tin nhắn riêng cho BOT)
+    // 1.3 Menu 1 Chạm & Trải Nghiệm Tương Tác Cao Cấp (chỉ chat 1-1)
+    if (isPrivateChat && (lowerText === 'menu' || lowerText === 'help' || lowerText === 'hd' || lowerText === 'hướng dẫn' || lowerText === 'chào' || lowerText === 'chao' || lowerText === 'xin chào' || lowerText === 'hi' || lowerText === 'hello' || lowerText === 'start')) {
+        const admin = await isAdmin(userId);
+        const flexCard = lineClient.createMainMenuFlexCard(admin);
+        const quickReply = lineClient.getQuickReplyMenu(admin);
+        const altText = '⚡ Menu Tiện Ích 1 Chạm PMH';
+        const ok = await lineClient.replyFlex(replyToken, altText, flexCard, quoteToken, quickReply);
+        if (!ok) {
+            const fallbackText =
+                `⚡ MENU TIỆN ÍCH 1 CHẠM PMH:\n` +
+                `━━━━━━━━━━━━━━━━━━━━━\n` +
+                `• "cp": Lấy mẫu form đăng ký PMH\n` +
+                `• "tk": Kiểm tra số lượng tồn kho PMH\n` +
+                `• "ls": Tra cứu lịch sử nhận mã hôm nay\n` +
+                `• "check [MĐH]": Tra cứu trạng thái đơn hàng\n` +
+                `• "admin": Quyền Quản Trị (Admin)\n` +
+                `• "web": Đường dẫn Web Quản Trị (Admin)\n` +
+                `━━━━━━━━━━━━━━━━━━━━━\n` +
+                `💡 Bấm các phím bên dưới để thao tác nhanh!`;
+            await lineClient.replyText(replyToken, fallbackText, quoteToken, quickReply);
+        }
+        return;
+    }
+
+    // 1.4 Lệnh Web Quản Trị (web) - CHỈ ÁP DỤNG CHO ADMIN
+    if (lowerText === 'web' || lowerText === 'webadmin' || lowerText === 'dashboard') {
+        const admin = await isAdmin(userId);
+        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu(admin) : null;
+        if (admin) {
+            const msg =
+                `🌐 WEB QUẢN TRỊ KHO PMH & HỆ THỐNG:\n` +
+                `━━━━━━━━━━━━━━━━━━━━━\n` +
+                `🔗 Link truy cập: https://pmh-line-bot.onrender.com\n` +
+                `━━━━━━━━━━━━━━━━━━━━━\n` +
+                `👑 Quyền hạn: Quản trị viên (Admin)\n` +
+                `💡 Bạn có thể nạp mã hàng loạt, duyệt đơn, cấu hình cú pháp và theo dõi realtime tại Web Quản Trị!`;
+            await lineClient.replyText(replyToken, msg, quoteToken, quickReply);
+        } else {
+            const msg =
+                `🔒 TỪ CHỐI TRUY CẬP:\n` +
+                `━━━━━━━━━━━━━━━━━━━━━\n` +
+                `Trang Web Quản Trị chỉ dành riêng cho Quản trị viên hệ thống (Admin).\n` +
+                `👉 Quản lý siêu thị vui lòng thao tác lấy mã PMH hoặc tra cứu đơn hàng qua tin nhắn Bot!`;
+            await lineClient.replyText(replyToken, msg, quoteToken, quickReply);
+        }
+        return;
+    }
+
+    // 1.5 Lệnh Báo Cáo Đối Soát Cuối Ngày (bcaoadmin) - CHỈ ÁP DỤNG CHO ADMIN
+    if (isPrivateChat && (lowerText === 'bcaoadmin' || lowerText === 'recapadmin' || lowerText === 'báo cáo admin' || lowerText === 'bcao admin')) {
+        const admin = await isAdmin(userId);
+        if (!admin) {
+            await lineClient.replyText(replyToken, '🔒 Báo cáo đối soát chỉ dành riêng cho Quản trị viên hệ thống.', quoteToken);
+            return;
+        }
+        const report = await couponService.generateAdminDailyAuditReport();
+        const quickReply = lineClient.getQuickReplyMenu(true);
+        await lineClient.replyText(replyToken, report, quoteToken, quickReply);
+        return;
+    }
+
+    // 1.6 Lệnh Tra cứu lịch sử & trạng thái của 1 Đơn Hàng (check [MĐH]) - CHỈ CHAT 1-1
+    const checkMatch = text.match(/^(?:check|tra|don|kiemtra|kt)\s*(.*)$/i);
+    if (checkMatch) {
+        if (!isPrivateChat) {
+            await lineClient.replyText(
+                replyToken,
+                `🔒 Để bảo mật thông tin đơn hàng và mã PMH, vui lòng nhắn tin riêng 1-1 với BOT để tra cứu đơn hàng!`,
+                quoteToken
+            );
+            return;
+        }
+
+        const rawMdh = checkMatch[1].trim();
+        const admin = await isAdmin(userId);
+        const quickReply = lineClient.getQuickReplyMenu(admin);
+
+        if (!rawMdh) {
+            await lineClient.replyText(
+                replyToken,
+                `🔍 CÚ PHÁP TRA CỨU ĐƠN HÀNG:\n━━━━━━━━━━━━━━━━━━━━━\n👉 Gõ: "check [Mã đơn hàng]"\nVí dụ: check 01602SO26090873540\n\n💡 Bot sẽ trả về chi tiết: Ai xin mã, kho nào, mã đã cấp và lịch sử thu hồi/đổi mã (nếu có).`,
+                quoteToken,
+                quickReply
+            );
+            return;
+        }
+
+        const orderData = await couponService.lookupOrderDetails(rawMdh);
+        if (!orderData.found) {
+            await lineClient.replyText(replyToken, orderData.message, quoteToken, quickReply);
+            return;
+        }
+
+        const flexCard = lineClient.createOrderLookupFlexCard(orderData);
+        const fallbackText =
+            `🔍 THÔNG TIN ĐƠN HÀNG ${orderData.mdh}:\n` +
+            `━━━━━━━━━━━━━━━━━━━━━\n` +
+            `• Quản lý: ${orderData.displayName}\n` +
+            `• Siêu thị: Kho ${orderData.maKho}\n` +
+            `• Loại PMH: ${orderData.loaiPMH}\n` +
+            `• Trạng thái: ${orderData.status}\n` +
+            `• Mã PMH hiện tại: ${orderData.currentCode || 'Chưa có'}\n` +
+            `• Cấp lúc: ${orderData.issuedTime} (Duyệt: ${orderData.approvedBy})\n` +
+            (orderData.isReplaced && orderData.oldCode ? `⚠️ Đã thu hồi mã cũ "${orderData.oldCode}" lúc ${orderData.oldTime} để cấp mã mới!` : '');
+
+        const ok = await lineClient.replyFlex(replyToken, fallbackText, flexCard, quoteToken, quickReply);
+        if (!ok) {
+            await lineClient.replyText(replyToken, fallbackText, quoteToken, quickReply);
+        }
+        return;
+    }
+
+    // 1.7 Hỗ trợ lọc danh sách phát mã của Quản lý (Chuyển tiếp tin nhắn riêng cho BOT)
     if (isPrivateChat && text.includes('➜ PMH')) {
         console.log(`[BOT] Nhận tin nhắn chuyển tiếp lọc PMH từ user: ${userId}`);
 
@@ -352,7 +465,8 @@ async function handleLineEvent(event) {
             }
         }
 
-        const quickReply = lineClient.getQuickReplyMenu();
+        const admin = await isAdmin(userId);
+        const quickReply = lineClient.getQuickReplyMenu(admin);
         if (matchedBlocks.length > 0) {
             const replyMsg =
                 `🎯 MÃ PMH CỦA BẠN (${primaryDisplayName}):\n` +
@@ -370,38 +484,34 @@ async function handleLineEvent(event) {
         }
     }
 
-    // 1.5 Đăng ký / Tra cứu Admin qua tin nhắn riêng (gõ "admin")
+    // 1.8 Tra cứu / Kiểm tra Admin qua tin nhắn riêng (gõ "admin") - CHỈ ÁP DỤNG CHO ADMIN
     if (isPrivateChat && lowerText === 'admin') {
         const displayName = await lineClient.getDisplayName(userId);
-        const admins = await Firebase.getAdmins();
-        const existing = admins.find(a => a.userId === userId || a.lineId === userId);
+        const admin = await isAdmin(userId);
+        const quickReply = lineClient.getQuickReplyMenu(admin);
 
-        if (existing) {
-            const msg = `👑 Chào ${displayName}!\n` +
-                `Thông tin LINE Admin của bạn đã có trên hệ thống:\n` +
-                `• Tên Admin: ${existing.name || displayName}\n` +
+        if (admin) {
+            const admins = await Firebase.getAdmins();
+            const existing = admins.find(a => a.userId === userId || a.lineId === userId);
+            const msg = `👑 Chào Admin ${displayName}!\n` +
+                `━━━━━━━━━━━━━━━━━━━━━\n` +
+                `Thông tin Quản trị viên của bạn:\n` +
+                `• Tên Admin: ${existing?.name || displayName}\n` +
                 `• LINE User ID: ${userId}\n` +
                 `• Quyền hạn: Quản trị & Duyệt mã PMH\n` +
-                `• Trạng thái: ${existing.active !== false ? 'Đang kích hoạt 🟢' : 'Đang tạm khóa 🔴'}\n` +
+                `• Trạng thái: Đang kích hoạt 🟢\n` +
+                `• Web Quản Trị: https://pmh-line-bot.onrender.com\n` +
                 `------------------------\n` +
                 `💡 Bạn có thể dùng lệnh "DUYỆT" hoặc "OK" trong nhóm để phát mã PMH cho Quản lý.`;
-            await lineClient.replyText(replyToken, msg);
+            await lineClient.replyText(replyToken, msg, quoteToken, quickReply);
         } else {
-            await Firebase.saveAdmin({
-                name: displayName,
-                userId: userId,
-                role: 'ADMIN',
-                active: true,
-                note: 'Tự động khai báo qua LINE'
-            });
-            const msg = `🎉 CHÚC MỪNG ${displayName}!\n` +
-                `Bạn đã được KHAI BÁO THÀNH CÔNG vào danh sách Admin trên hệ thống:\n` +
-                `• Tên Admin: ${displayName}\n` +
+            const msg = `🔒 TỪ CHỐI TRUY CẬP QUẢN TRỊ:\n` +
+                `━━━━━━━━━━━━━━━━━━━━━\n` +
+                `Quyền Quản Trị Viên (Admin) chỉ áp dụng cho các tài khoản đã được cấp quyền.\n` +
+                `• Tên tài khoản: ${displayName}\n` +
                 `• LINE User ID: ${userId}\n` +
-                `• Quyền hạn: Duyệt mã & Quản lý kho PMH\n` +
-                `------------------------\n` +
-                `💡 Bạn có thể dùng lệnh "DUYỆT" hoặc "OK" trong nhóm chat để phát mã PMH cho Quản lý.`;
-            await lineClient.replyText(replyToken, msg);
+                `👉 Quản lý siêu thị vui lòng sử dụng các phím chức năng bên dưới để xin hoặc tra cứu mã PMH!`;
+            await lineClient.replyText(replyToken, msg, quoteToken, quickReply);
         }
         return;
     }
@@ -903,6 +1013,18 @@ async function handleCouponRequest(payload) {
             oldRecipient: oldRecipient
         });
 
+        // Bắn sự kiện realtime cho Web Admin
+        realtimeHub.broadcast('coupon_sent', {
+            orderId: data.mdh,
+            mdh: data.mdh,
+            maKho: data.maKho,
+            recipient: displayName,
+            loaiPMH: data.loaiPMH,
+            code: coupon.code,
+            isReplaced: isReplaced,
+            approvedBy: isReplaced ? 'BOT_AUTO_REPLACE' : 'BOT_AUTO'
+        });
+
         // Kiểm tra số lượng tồn còn lại để đính kèm cảnh báo trực tiếp vào tin phát mã
         const remaining = await Firebase.getUnusedCountByType(data.loaiPMH);
         let stockHint = '';
@@ -971,6 +1093,16 @@ async function handleCouponRequest(payload) {
             oldType: oldType || '',
             oldTime: oldTime || '',
             oldRecipient: oldRecipient || ''
+        });
+
+        // Bắn sự kiện realtime đơn chờ duyệt cho Web Admin
+        realtimeHub.broadcast('request_pending', {
+            orderId: data.mdh,
+            mdh: data.mdh,
+            maKho: data.maKho,
+            displayName: displayName,
+            loaiPMH: data.loaiPMH,
+            isReplaced: isReplaced
         });
 
         // Phản hồi đã tiếp nhận và đính kèm CẢNH BÁO TRÙNG MĐH nếu có
@@ -1121,6 +1253,18 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
             oldRecipient: oldRecipient || ''
         });
 
+        // Bắn sự kiện realtime cho Web Admin
+        realtimeHub.broadcast('coupon_sent', {
+            orderId: targetReq.mdh,
+            mdh: targetReq.mdh,
+            maKho: targetReq.maKho,
+            recipient: targetReq.displayName,
+            loaiPMH: targetReq.loaiPMH,
+            code: finalCouponCode,
+            isReplaced: isReplaced,
+            approvedBy: adminUserId
+        });
+
         // Kiểm tra số lượng tồn còn lại
         const remaining = await Firebase.getUnusedCountByType(targetReq.loaiPMH);
         let stockHint = '';
@@ -1254,6 +1398,18 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
                 oldType: oldType || '',
                 oldTime: oldTime || '',
                 oldRecipient: oldRecipient || ''
+            });
+
+            // Bắn sự kiện realtime cho Web Admin
+            realtimeHub.broadcast('coupon_sent', {
+                orderId: req.mdh,
+                mdh: req.mdh,
+                maKho: req.maKho,
+                recipient: req.displayName,
+                loaiPMH: req.loaiPMH,
+                code: couponCode,
+                isReplaced: isReplaced,
+                approvedBy: adminUserId
             });
 
             if (isReplaced && oldCode) {

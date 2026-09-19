@@ -30,6 +30,14 @@ function setupCronJobs() {
     }, {
         timezone: 'Asia/Ho_Chi_Minh'
     });
+
+    // 5. Báo cáo đối soát phát/thu hồi gửi tin nhắn riêng cho từng Admin lúc 22:15 PM giờ Việt Nam
+    cron.schedule('15 22 * * *', async () => {
+        console.log('[Cron] Chạy báo cáo đối soát phát/thu hồi mã gửi riêng cho Admin (22:15 PM VN)...');
+        await sendDailyAdminAuditReport();
+    }, {
+        timezone: 'Asia/Ho_Chi_Minh'
+    });
 }
 
 /**
@@ -267,10 +275,55 @@ async function sendDailyRecapReport() {
     }
 }
 
+/**
+ * Tự động xuất báo cáo đối soát tin nhắn riêng cho từng Admin lúc 22:15 hàng ngày
+ */
+async function sendDailyAdminAuditReport() {
+    try {
+        const CONFIG = require('./config');
+        const admins = await Firebase.getAdmins();
+        const adminTargets = new Set();
+
+        if (Array.isArray(CONFIG.ADMIN_IDS)) {
+            CONFIG.ADMIN_IDS.forEach(id => {
+                if (id) adminTargets.add(id.trim());
+            });
+        }
+
+        if (admins && Array.isArray(admins)) {
+            admins.forEach(a => {
+                if (a.active !== false && (a.userId || a.lineId)) {
+                    adminTargets.add((a.userId || a.lineId).trim());
+                }
+            });
+        }
+
+        if (adminTargets.size === 0) {
+            console.log('[Cron] Không tìm thấy Admin nào để gửi báo cáo đối soát.');
+            return;
+        }
+
+        const reportMessage = await couponService.generateAdminDailyAuditReport();
+        let sentCount = 0;
+
+        for (const adminId of adminTargets) {
+            const ok = await lineClient.pushText(adminId, reportMessage);
+            if (ok) sentCount++;
+            await new Promise(r => setTimeout(r, 300));
+        }
+
+        console.log(`[Cron] Đã gửi báo cáo đối soát riêng cho ${sentCount}/${adminTargets.size} Admin.`);
+        await Firebase.logSystem('ADMIN_AUDIT_REPORT_SENT', { sentCount, totalAdmins: adminTargets.size });
+    } catch (e) {
+        console.error('[Cron] Lỗi sendDailyAdminAuditReport:', e.message);
+    }
+}
+
 module.exports = {
     setupCronJobs,
     checkAndRunSchedules,
     executeSchedule,
     broadcastMessage,
-    sendDailyRecapReport
+    sendDailyRecapReport,
+    sendDailyAdminAuditReport
 };
