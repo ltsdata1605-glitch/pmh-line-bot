@@ -234,6 +234,83 @@ const lineClient = {
     },
 
     /**
+     * Trả lời bằng Sticker động kèm Text (tiếp nhận form đăng ký, phản hồi xác nhận nhanh)
+     */
+    async replyStickerAndText(replyToken, packageId, stickerId, text, quoteToken = null, sourceId = null) {
+        if (!replyToken || !text) return false;
+
+        const cleanText = String(text).trim();
+        const textMsg = {
+            type: 'text',
+            text: cleanText
+        };
+        if (quoteToken && typeof quoteToken === 'string' && quoteToken.trim()) {
+            textMsg.quoteToken = quoteToken.trim();
+        }
+
+        const messages = [];
+        if (packageId && stickerId) {
+            messages.push({
+                type: 'sticker',
+                packageId: String(packageId),
+                stickerId: String(stickerId)
+            });
+        }
+        messages.push(textMsg);
+
+        try {
+            await client.replyMessage({
+                replyToken: replyToken,
+                messages: messages
+            });
+            console.log('[LINE] Phản hồi Sticker + Text thành công!');
+            return true;
+        } catch (error) {
+            const Firebase = require('./firebase');
+            const errData = error?.body || (error.response ? JSON.stringify(error.response.data) : (error.message || error));
+            console.error('[LINE] Lỗi replyStickerAndText:', errData);
+            Firebase.logSystem('REPLY_STICKER_ERROR', { error: errData, token: CONFIG.CHANNEL_ACCESS_TOKEN.slice(0, 10) }).catch(() => {});
+
+            // Fallback 1: Thử gửi lại tin nhắn text thuần qua replyToken
+            try {
+                await client.replyMessage({
+                    replyToken: replyToken,
+                    messages: [{ type: 'text', text: cleanText }]
+                });
+                console.log('[LINE] Fallback text qua replyToken thành công!');
+                return true;
+            } catch (fb1Err) {}
+
+            // Fallback 2: Push trực tiếp tới phòng chat (sourceId)
+            if (sourceId) {
+                try {
+                    console.log(`[LINE] Fallback 2: Push Sticker + Text trực tiếp tới ${sourceId}...`);
+                    await client.pushMessage({
+                        to: sourceId,
+                        messages: messages
+                    });
+                    console.log('[LINE] Fallback push Sticker + Text thành công!');
+                    return true;
+                } catch (pushErr) {
+                    try {
+                        console.log(`[LINE] Fallback 2b: Push Text trực tiếp tới ${sourceId}...`);
+                        await client.pushMessage({
+                            to: sourceId,
+                            messages: [{ type: 'text', text: cleanText }]
+                        });
+                        console.log('[LINE] Fallback push Text thành công!');
+                        return true;
+                    } catch (e) {
+                        console.error('[LINE] Fallback push cũng thất bại:', e.message);
+                    }
+                }
+            }
+
+            return false;
+        }
+    },
+
+    /**
      * Chủ động gửi tin nhắn Flex Message tới User hoặc Group
      */
     async pushFlex(toId, altText, flexContents) {
