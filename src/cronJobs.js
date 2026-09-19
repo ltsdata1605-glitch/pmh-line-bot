@@ -80,7 +80,16 @@ async function checkAndRunSchedules() {
             } else if (type === 'WEEKDAYS') {
                 const isWeekday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(currentDay);
                 if (!isWeekday) continue;
+            } else if (type === 'CUSTOM_DAYS') {
+                // Múi giờ Việt Nam: 0 = CN, 1 = T2, 2 = T3, 3 = T4, 4 = T5, 5 = T6, 6 = T7
+                const vnDate = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+                const vnDayNum = vnDate.getDay();
+                if (Array.isArray(sched.daysOfWeek) && sched.daysOfWeek.length > 0) {
+                    const matched = sched.daysOfWeek.map(Number).includes(vnDayNum);
+                    if (!matched) continue;
+                }
             }
+
 
             console.log(`[Cron] ⏰ Kích hoạt lịch hẹn "${sched.title || sched.id}" (${currentTime})...`);
             await executeSchedule(sched);

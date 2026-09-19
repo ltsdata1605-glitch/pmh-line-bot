@@ -1794,6 +1794,10 @@ function renderSchedulesTable() {
             typeBadge = '<span class="status-badge" style="color: #0284C7; background: #E0F2FE; border: 1px solid #BAE6FD;"><i class="fa-solid fa-business-time"></i> Thứ 2 - Thứ 6</span>';
         } else if (sched.scheduleType === 'ONCE') {
             typeBadge = `<span class="status-badge" style="color: #D97706; background: #FEF3C7; border: 1px solid #FDE68A;"><i class="fa-solid fa-calendar-day"></i> Một lần (${sched.date || 'Hôm nay'})</span>`;
+        } else if (sched.scheduleType === 'CUSTOM_DAYS' || (Array.isArray(sched.daysOfWeek) && sched.daysOfWeek.length > 0)) {
+            const dayNames = { '1': 'T2', '2': 'T3', '3': 'T4', '4': 'T5', '5': 'T6', '6': 'T7', '0': 'CN' };
+            const daysStr = (sched.daysOfWeek || []).map(d => dayNames[String(d)] || d).join(', ');
+            typeBadge = `<span class="status-badge" style="color: #7C3AED; background: #F5F3FF; border: 1px solid #DDD6FE;"><i class="fa-solid fa-calendar-week"></i> ${daysStr || 'Tùy chọn'}</span>`;
         }
 
         // Nhóm nhận tin
@@ -1949,6 +1953,10 @@ function openAddScheduleModal(editId = null) {
     const dateInput = document.getElementById('schedule-date');
     const activeInput = document.getElementById('schedule-active');
 
+    // Reset day chips
+    const dayCheckboxes = document.querySelectorAll('input[name="schedule-day"]');
+    dayCheckboxes.forEach(cb => { cb.checked = false; });
+
     // Populate group checkboxes
     populateGroupCheckboxes('custom-groups-checkboxes', []);
 
@@ -1963,6 +1971,21 @@ function openAddScheduleModal(editId = null) {
             timeInput.value = target.time || '08:00';
             dateInput.value = target.date || '';
             activeInput.checked = target.active !== false;
+
+            if (target.daysOfWeek && Array.isArray(target.daysOfWeek)) {
+                dayCheckboxes.forEach(cb => {
+                    if (target.daysOfWeek.map(Number).includes(Number(cb.value))) {
+                        cb.checked = true;
+                    }
+                });
+            } else if (target.scheduleType === 'WEEKDAYS') {
+                dayCheckboxes.forEach(cb => {
+                    const v = Number(cb.value);
+                    cb.checked = (v >= 1 && v <= 5);
+                });
+            } else {
+                dayCheckboxes.forEach(cb => { cb.checked = true; });
+            }
 
             if (Array.isArray(target.target)) {
                 document.getElementById('target-type-custom').checked = true;
@@ -1983,6 +2006,9 @@ function openAddScheduleModal(editId = null) {
         dateInput.value = new Date().toISOString().slice(0, 10);
         activeInput.checked = true;
 
+        // Default: pre-check all days
+        dayCheckboxes.forEach(cb => { cb.checked = true; });
+
         document.getElementById('target-type-all').checked = true;
         toggleCustomGroupSelection(false);
     }
@@ -1999,6 +2025,8 @@ function closeScheduleModal() {
 function handleScheduleTypeChange() {
     const type = document.getElementById('schedule-type').value;
     const dateGroup = document.getElementById('group-schedule-date');
+    const daysGroup = document.getElementById('group-schedule-days');
+
     if (dateGroup) {
         if (type === 'ONCE') {
             dateGroup.classList.remove('hidden');
@@ -2006,6 +2034,30 @@ function handleScheduleTypeChange() {
             dateGroup.classList.add('hidden');
         }
     }
+
+    if (daysGroup) {
+        if (type === 'CUSTOM_DAYS') {
+            daysGroup.classList.remove('hidden');
+        } else {
+            daysGroup.classList.add('hidden');
+        }
+    }
+}
+
+function selectDaysPreset(preset) {
+    const checkboxes = document.querySelectorAll('input[name="schedule-day"]');
+    checkboxes.forEach(cb => {
+        const val = Number(cb.value);
+        if (preset === 'ALL') {
+            cb.checked = true;
+        } else if (preset === 'WEEKDAYS') {
+            cb.checked = (val >= 1 && val <= 5);
+        } else if (preset === 'WEEKEND') {
+            cb.checked = (val === 6 || val === 0);
+        } else if (preset === 'CLEAR') {
+            cb.checked = false;
+        }
+    });
 }
 
 function toggleCustomGroupSelection(isCustom) {
@@ -2027,9 +2079,12 @@ function populateGroupCheckboxes(containerId, selectedIds = []) {
     }
 
     container.innerHTML = groups.map(g => `
-        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer; padding: 3px 0;">
-            <input type="checkbox" value="${g.groupId}" ${selectedIds.includes(g.groupId) ? 'checked' : ''} style="accent-color: #4F46E5;">
-            <span><strong>${escapeHtml(g.groupName || 'Nhóm')}</strong> <span style="color:#64748B; font-family:monospace; font-size:0.75rem;">(${g.groupId})</span></span>
+        <label class="group-check-item">
+            <input type="checkbox" value="${g.groupId}" ${selectedIds.includes(g.groupId) ? 'checked' : ''}>
+            <div class="group-check-info">
+                <span class="group-check-name" title="${escapeHtml(g.groupName || 'Nhóm')}">${escapeHtml(g.groupName || 'Nhóm')}</span>
+                <span class="group-check-id">${g.groupId.slice(0, 10)}...</span>
+            </div>
         </label>
     `).join('');
 }
@@ -2045,6 +2100,24 @@ function handleSaveSchedule(e) {
     const date = document.getElementById('schedule-date').value;
     const active = document.getElementById('schedule-active').checked;
     const isCustomTarget = document.getElementById('target-type-custom').checked;
+
+    let daysOfWeek = [];
+    if (scheduleType === 'CUSTOM_DAYS') {
+        const checkedDays = document.querySelectorAll('input[name="schedule-day"]:checked');
+        daysOfWeek = Array.from(checkedDays).map(cb => Number(cb.value)).sort((a, b) => {
+            const orderA = a === 0 ? 7 : a;
+            const orderB = b === 0 ? 7 : b;
+            return orderA - orderB;
+        });
+        if (daysOfWeek.length === 0) {
+            showToast('Vui lòng chọn ít nhất 1 thứ trong tuần!', 'warning');
+            return;
+        }
+    } else if (scheduleType === 'WEEKDAYS') {
+        daysOfWeek = [1, 2, 3, 4, 5];
+    } else if (scheduleType === 'DAILY') {
+        daysOfWeek = [1, 2, 3, 4, 5, 6, 0];
+    }
 
     let target = 'ALL_GROUPS';
     if (isCustomTarget) {
@@ -2064,6 +2137,7 @@ function handleSaveSchedule(e) {
         content,
         scheduleType,
         time,
+        daysOfWeek,
         date: scheduleType === 'ONCE' ? date : '',
         target,
         active,

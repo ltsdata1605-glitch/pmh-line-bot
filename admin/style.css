@@ -1384,6 +1384,10 @@ code {
     animation: scaleUp 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+.modal-box.modal-md {
+    max-width: 620px;
+}
+
 .modal-box.modal-lg {
     max-width: 720px;
 }
@@ -1970,5 +1974,210 @@ code {
     color: var(--text-muted);
     margin-top: 2px;
 }
+
+/* ==================== SCHEDULE MODAL REDESIGNED UI ==================== */
+.target-type-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 6px;
+    margin-bottom: 8px;
+}
+
+@media (max-width: 600px) {
+    .target-type-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.target-card-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: #F8FAFC;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.target-card-option input[type="radio"] {
+    margin-top: 3px;
+    accent-color: #4F46E5;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.target-card-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.target-card-content i {
+    font-size: 1.15rem;
+    color: #64748B;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.target-card-content strong {
+    display: block;
+    font-size: 0.88rem;
+    color: #1E293B;
+    line-height: 1.25;
+    margin-bottom: 2px;
+}
+
+.target-card-content small {
+    display: block;
+    font-size: 0.74rem;
+    color: #64748B;
+    line-height: 1.25;
+}
+
+.target-card-option:has(input:checked) {
+    border-color: #4F46E5;
+    background: #EEF2FF;
+}
+
+.target-card-option:has(input:checked) i {
+    color: #4F46E5;
+}
+
+.target-card-option:has(input:checked) strong {
+    color: #4338CA;
+}
+
+/* Day of Week Selector */
+.days-of-week-selector {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.day-chip {
+    cursor: pointer;
+    user-select: none;
+    margin: 0;
+}
+
+.day-chip input {
+    display: none;
+}
+
+.day-chip span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 38px;
+    border-radius: 8px;
+    border: 1.5px solid #CBD5E1;
+    background: #FFFFFF;
+    color: #475569;
+    font-size: 0.88rem;
+    font-weight: 700;
+    transition: all var(--transition-fast);
+}
+
+.day-chip input:checked + span {
+    background: #4F46E5;
+    border-color: #4F46E5;
+    color: #FFFFFF;
+    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.35);
+    transform: translateY(-1px);
+}
+
+.day-chip:hover span {
+    border-color: #4F46E5;
+    color: #4F46E5;
+}
+
+.day-chip input:checked:hover + span {
+    color: #FFFFFF;
+}
+
+.btn-link-sm {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #4F46E5;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    transition: color var(--transition-fast);
+}
+
+.btn-link-sm:hover {
+    color: #312E81;
+}
+
+/* Custom Groups List inside modal */
+.group-check-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.group-check-item:hover {
+    background: #F1F5F9;
+    border-color: #CBD5E1;
+}
+
+.group-check-item:has(input:checked) {
+    background: #F0FDF4;
+    border-color: #86EFAC;
+}
+
+.group-check-item input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    accent-color: #10B981;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.group-check-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.group-check-name {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: #0F172A;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.group-check-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: #64748B;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
 
 

@@ -968,7 +968,8 @@ NDYXIKJL0L	ML200..." rows="8" oninput="previewBulkImport()"></textarea>
                             <label for="schedule-type"><i class="fa-solid fa-repeat"></i> Chu Kỳ Lặp</label>
                             <select id="schedule-type" class="form-control" onchange="handleScheduleTypeChange()">
                                 <option value="DAILY">Hàng ngày (Mỗi ngày)</option>
-                                <option value="WEEKDAYS">Thứ 2 đến Thứ 6</option>
+                                <option value="CUSTOM_DAYS">Tùy chọn thứ trong tuần (Nhiều thứ)</option>
+                                <option value="WEEKDAYS">Thứ 2 đến Thứ 6 (Ngày làm việc)</option>
                                 <option value="ONCE">Một lần duy nhất</option>
                             </select>
                         </div>
@@ -979,6 +980,35 @@ NDYXIKJL0L	ML200..." rows="8" oninput="previewBulkImport()"></textarea>
                         </div>
                     </div>
 
+                    <!-- Chọn các thứ trong tuần khi chọn CUSTOM_DAYS -->
+                    <div class="form-group hidden" id="group-schedule-days" style="background: #F8FAFC; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px 14px; margin-top: -4px; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <label style="margin-bottom: 0; font-size: 0.86rem; font-weight: 600; color: #1E293B;">
+                                <i class="fa-regular fa-calendar-check" style="color: #4F46E5;"></i> Chọn Các Thứ Trong Tuần <span class="text-danger">*</span>
+                            </label>
+                            <span style="font-size: 0.74rem; color: #64748B;">Có thể chọn cùng lúc nhiều thứ</span>
+                        </div>
+                        <div class="days-of-week-selector">
+                            <label class="day-chip"><input type="checkbox" name="schedule-day" value="1"><span>T2</span></label>
+                            <label class="day-chip"><input type="checkbox" name="schedule-day" value="2"><span>T3</span></label>
+                            <label class="day-chip"><input type="checkbox" name="schedule-day" value="3"><span>T4</span></label>
+                            <label class="day-chip"><input type="checkbox" name="schedule-day" value="4"><span>T5</span></label>
+                            <label class="day-chip"><input type="checkbox" name="schedule-day" value="5"><span>T6</span></label>
+                            <label class="day-chip"><input type="checkbox" name="schedule-day" value="6"><span>T7</span></label>
+                            <label class="day-chip"><input type="checkbox" name="schedule-day" value="0"><span>CN</span></label>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #E2E8F0; font-size: 0.78rem;">
+                            <span style="color: #64748B;">Chọn nhanh:</span>
+                            <button type="button" class="btn-link-sm" onclick="selectDaysPreset('ALL')">Tất cả</button>
+                            <span style="color: #CBD5E1;">•</span>
+                            <button type="button" class="btn-link-sm" onclick="selectDaysPreset('WEEKDAYS')">Thứ 2 - Thứ 6</button>
+                            <span style="color: #CBD5E1;">•</span>
+                            <button type="button" class="btn-link-sm" onclick="selectDaysPreset('WEEKEND')">Thứ 7 & CN</button>
+                            <span style="color: #CBD5E1;">•</span>
+                            <button type="button" class="btn-link-sm" onclick="selectDaysPreset('CLEAR')">Bỏ chọn</button>
+                        </div>
+                    </div>
+
                     <div class="form-group hidden" id="group-schedule-date">
                         <label for="schedule-date"><i class="fa-regular fa-calendar-days"></i> Ngày Gửi (Chỉ áp dụng khi chọn Một lần)</label>
                         <input type="date" id="schedule-date" class="form-control">
@@ -986,18 +1016,30 @@ NDYXIKJL0L	ML200..." rows="8" oninput="previewBulkImport()"></textarea>
 
                     <div class="form-group">
                         <label><i class="fa-solid fa-users"></i> Nhóm Nhận Thông Báo</label>
-                        <div style="display: flex; gap: 16px; margin-top: 6px; margin-bottom: 8px;">
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                        <div class="target-type-grid">
+                            <label class="target-card-option" id="label-target-all">
                                 <input type="radio" name="target-type" id="target-type-all" value="ALL_GROUPS" checked onchange="toggleCustomGroupSelection(false)">
-                                <strong>Tất cả nhóm BOT tham gia</strong>
+                                <div class="target-card-content">
+                                    <i class="fa-solid fa-users"></i>
+                                    <div>
+                                        <strong>Tất cả nhóm</strong>
+                                        <small>Tất cả nhóm BOT tham gia</small>
+                                    </div>
+                                </div>
                             </label>
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                            <label class="target-card-option" id="label-target-custom">
                                 <input type="radio" name="target-type" id="target-type-custom" value="CUSTOM" onchange="toggleCustomGroupSelection(true)">
-                                <span>Chọn nhóm cụ thể</span>
+                                <div class="target-card-content">
+                                    <i class="fa-solid fa-layer-group"></i>
+                                    <div>
+                                        <strong>Chọn nhóm cụ thể</strong>
+                                        <small>Tích chọn các nhóm chỉ định</small>
+                                    </div>
+                                </div>
                             </label>
                         </div>
 
-                        <div id="custom-groups-container" class="hidden" style="max-height: 140px; overflow-y: auto; background: #F8FAFC; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px;">
+                        <div id="custom-groups-container" class="hidden" style="max-height: 160px; overflow-y: auto; background: #F8FAFC; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 10px; margin-top: 8px;">
                             <div id="custom-groups-checkboxes" style="display: flex; flex-direction: column; gap: 6px;">
                                 <!-- Rendered dynamically -->
                             </div>
@@ -1046,18 +1088,30 @@ NDYXIKJL0L	ML200..." rows="8" oninput="previewBulkImport()"></textarea>
 
                     <div class="form-group">
                         <label><i class="fa-solid fa-users"></i> Gửi Đến Nhóm</label>
-                        <div style="display: flex; gap: 16px; margin-top: 6px;">
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                        <div class="target-type-grid">
+                            <label class="target-card-option" id="label-broadcast-target-all">
                                 <input type="radio" name="broadcast-target-type" id="broadcast-target-all" value="ALL_GROUPS" checked onchange="toggleBroadcastCustomGroups(false)">
-                                <strong>Tất cả nhóm BOT tham gia</strong>
+                                <div class="target-card-content">
+                                    <i class="fa-solid fa-users"></i>
+                                    <div>
+                                        <strong>Tất cả nhóm</strong>
+                                        <small>Tất cả nhóm BOT tham gia</small>
+                                    </div>
+                                </div>
                             </label>
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                            <label class="target-card-option" id="label-broadcast-target-custom">
                                 <input type="radio" name="broadcast-target-type" id="broadcast-target-custom" value="CUSTOM" onchange="toggleBroadcastCustomGroups(true)">
-                                <span>Chọn nhóm cụ thể</span>
+                                <div class="target-card-content">
+                                    <i class="fa-solid fa-layer-group"></i>
+                                    <div>
+                                        <strong>Chọn nhóm cụ thể</strong>
+                                        <small>Tích chọn các nhóm chỉ định</small>
+                                    </div>
+                                </div>
                             </label>
                         </div>
 
-                        <div id="broadcast-groups-container" class="hidden" style="max-height: 140px; overflow-y: auto; background: #F8FAFC; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px; margin-top: 8px;">
+                        <div id="broadcast-groups-container" class="hidden" style="max-height: 160px; overflow-y: auto; background: #F8FAFC; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 10px; margin-top: 8px;">
                             <div id="broadcast-groups-checkboxes" style="display: flex; flex-direction: column; gap: 6px;">
                                 <!-- Rendered dynamically -->
                             </div>

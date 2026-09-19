@@ -147,6 +147,51 @@ async function handleLineEvent(event) {
         return;
     }
 
+    // 1.4 Hỗ trợ lọc danh sách phát mã của Quản lý (Chuyển tiếp tin nhắn riêng cho BOT)
+    if (isPrivateChat && text.includes('➜ PMH')) {
+        let displayName = await lineClient.getDisplayName(userId);
+        if (!displayName || displayName === 'Quản lý') {
+            const requests = await Firebase.getRequests();
+            const pastReq = requests.slice().reverse().find(r => r.userId === userId && r.displayName);
+            if (pastReq) displayName = pastReq.displayName;
+        }
+
+        const blocks = text.split(/[━─—\-\=]{4,}/);
+        const matchedBlocks = [];
+        const lowerDisplayName = (displayName || '').toLowerCase().trim();
+
+        for (let i = 0; i < blocks.length; i++) {
+            const block = blocks[i].trim();
+            if (!block) continue;
+
+            // Bỏ qua dòng tiêu đề và dòng hướng dẫn
+            if (block.includes('Admin đã duyệt') ||
+                block.includes('ADMIN ĐÃ DUYỆT') ||
+                block.includes('BOT đã tự động duyệt') ||
+                block.includes('Hãy chuyển tiếp tin nhắn này') ||
+                block.includes('lọc nhanh PMH')) {
+                continue;
+            }
+
+            const lines = block.split(/\r?\n/);
+            if (lines.length > 0) {
+                const firstLine = lines[0].trim().toLowerCase();
+                if (lowerDisplayName && (firstLine.includes(lowerDisplayName) || lowerDisplayName.includes(firstLine))) {
+                    matchedBlocks.push(block);
+                }
+            }
+        }
+
+        if (matchedBlocks.length > 0) {
+            const replyMsg = `🎯 MÃ PMH CỦA BẠN (${displayName}):\n━━━━━━━━━━━━━\n` + matchedBlocks.join('\n━━━━━━━━━━━━━\n');
+            await lineClient.replyText(replyToken, replyMsg, quoteToken);
+            return;
+        } else {
+            await lineClient.replyText(replyToken, `❌ Không tìm thấy mã PMH nào khớp với tên LINE "${displayName || 'của bạn'}" trong danh sách trên.`, quoteToken);
+            return;
+        }
+    }
+
     // 1.5 Đăng ký / Tra cứu Admin qua tin nhắn riêng (gõ "admin")
     if (isPrivateChat && lowerText === 'admin') {
         const displayName = await lineClient.getDisplayName(userId);
@@ -626,7 +671,10 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
     }
 
     if (approvedCount > 0) {
-        const fullMsg = `✅ ADMIN ĐÃ DUYỆT PHÁT MÃ (${approvedCount} đơn):${NL}━━━━━━━━━━━━━${NL}` + results.join(`${NL}━━━━━━━━━━━━━${NL}`);
+        let fullMsg = `✅ ADMIN ĐÃ DUYỆT PHÁT MÃ (${approvedCount} đơn):${NL}━━━━━━━━━━━━━${NL}` + results.join(`${NL}━━━━━━━━━━━━━${NL}`);
+        if (approvedCount > 1) {
+            fullMsg += `${NL}━━━━━━━━━━━━━${NL}💡 Hãy chuyển tiếp tin nhắn này cho BOT để lọc nhanh PMH của bạn!`;
+        }
         await lineClient.replyText(replyToken, fullMsg, quoteToken);
     } else {
         await lineClient.replyText(replyToken, '❌ Không thể duyệt vì các loại PMH trong danh sách chờ đã hết mã.', quoteToken);
