@@ -949,19 +949,8 @@ async function handleCouponRequest(payload) {
     let oldRecipient = '';
 
     if (dupCheck.action === 'already_pending') {
-        const pendingMsg =
-            `⚠️ ĐƠN HÀNG ĐANG CHỜ DUYỆT!\n` +
-            `━━━━━━━━━━━━━━━━━━━━━\n` +
-            `MĐH "${data.mdh}" (${data.loaiPMH}) hiện đã được tiếp nhận và đang nằm trong danh sách chờ Admin duyệt.\n` +
-            `👉 Quản lý vui lòng không gửi lại để tránh trùng lặp! Admin sẽ duyệt sớm nhất.`;
-        await lineClient.replyStickerAndText(
-            payload.replyToken,
-            '11537',
-            '52002735',
-            pendingMsg,
-            payload.quoteToken,
-            payload.sourceId
-        );
+        const pendingMsg = `⚠️ MĐH ${data.mdh} (${data.loaiPMH}) đang chờ Admin duyệt, vui lòng không gửi lại!`;
+        await lineClient.replyText(payload.replyToken, pendingMsg, payload.quoteToken, null, payload.sourceId);
         return;
     }
 
@@ -1178,14 +1167,7 @@ async function handleCouponRequest(payload) {
         } else {
             pendingMsg = `⏳ Đã nhận yêu cầu PMH ${data.loaiPMH} (MĐH: ${data.mdh || '-'}). Đang chờ Admin duyệt...`;
         }
-        await lineClient.replyStickerAndText(
-            payload.replyToken,
-            '11537',
-            '52002734',
-            pendingMsg,
-            payload.quoteToken,
-            payload.sourceId
-        );
+        await lineClient.replyText(payload.replyToken, pendingMsg, payload.quoteToken, null, payload.sourceId);
     }
 }
 
