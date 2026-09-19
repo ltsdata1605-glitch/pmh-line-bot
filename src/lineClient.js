@@ -42,6 +42,14 @@ const lineClient = {
                     type: 'action',
                     action: {
                         type: 'message',
+                        label: '📚 Tất cả lịch sử (lsall)',
+                        text: 'lsall'
+                    }
+                },
+                {
+                    type: 'action',
+                    action: {
+                        type: 'message',
                         label: '❓ Hướng dẫn (hd)',
                         text: 'hd'
                     }

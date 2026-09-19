@@ -322,6 +322,94 @@ const couponService = {
     },
 
     /**
+     * Lấy toàn bộ lịch sử nhận mã PMH của người dùng, gom nhóm và phân theo từng ngày
+     */
+    async getUserAllHistory(userId) {
+        if (!userId) return null;
+
+        const requests = await Firebase.getRequests();
+
+        const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+
+        const displayDateFormatter = new Intl.DateTimeFormat('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+
+        const timeFormatter = new Intl.DateTimeFormat('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+
+        // Lọc tất cả các mã đã phát của Quản lý này
+        const matched = requests.filter(r => {
+            if (r.userId !== userId && r.recipientId !== userId) return false;
+            if (r.status !== CONFIG.REQUEST_STATUS_SENT && r.status !== 'SENT') return false;
+            if (!r.couponCode) return false;
+            return true;
+        });
+
+        if (!matched || matched.length === 0) {
+            return { count: 0, groups: [] };
+        }
+
+        // Sắp xếp thời gian giảm dần (mới nhất lên đầu)
+        matched.sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
+
+        // Gom nhóm theo từng ngày
+        const groupMap = {};
+        matched.forEach(r => {
+            const reqDate = new Date(r.createdAt || r.updatedAt || 0);
+            let dateKey = 'Khác';
+            let dateDisplay = 'Khác';
+            try {
+                dateKey = dateFormatter.format(reqDate); // "YYYY-MM-DD"
+                dateDisplay = displayDateFormatter.format(reqDate); // "DD/MM/YYYY"
+            } catch (e) {}
+
+            if (!groupMap[dateKey]) {
+                groupMap[dateKey] = {
+                    dateKey,
+                    dateDisplay,
+                    items: []
+                };
+            }
+
+            let timeStr = '--:--';
+            try {
+                timeStr = timeFormatter.format(reqDate);
+            } catch (e) {}
+
+            groupMap[dateKey].items.push({
+                time: timeStr,
+                loaiPMH: r.loaiPMH || 'PMH',
+                code: r.couponCode,
+                mdh: r.mdh || '-',
+                maKho: r.maKho || '-',
+                displayName: r.displayName || 'Quản lý'
+            });
+        });
+
+        const groups = Object.values(groupMap);
+        const displayName = matched[0]?.displayName || 'Quản lý';
+
+        return {
+            displayName,
+            count: matched.length,
+            groups
+        };
+    },
+
+    /**
      * Tạo báo cáo tổng kết cuối ngày lúc 22:00 (Daily Recap)
      */
     async generateDailyRecapMessage() {

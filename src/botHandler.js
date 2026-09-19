@@ -529,19 +529,74 @@ async function handleLineEvent(event) {
         return;
     }
 
-    // 3.5 Lệnh Lịch Sử Nhận Mã Hôm Nay (ls / lichsu)
-    const isLs = lowerText === 'ls' || lowerText.startsWith('ls ') || lowerText === 'lichsu' || lowerText === 'lich su' || lowerText === 'lịch sử' || lowerText === '.ls' || lowerText === '/ls';
-    if (isLs) {
+    // 3.5 Lệnh Lịch Sử Nhận Mã (ls: trong ngày hôm nay | lsall: toàn bộ lịch sử phân theo ngày)
+    const isLsAll = lowerText === 'lsall' || lowerText === 'ls all' || lowerText === 'lichsuall' || lowerText === 'lich su all' || lowerText === '.lsall' || lowerText === '/lsall';
+    const isLsToday = !isLsAll && (lowerText === 'ls' || lowerText.startsWith('ls ') || lowerText === 'lichsu' || lowerText === 'lich su' || lowerText === 'lịch sử' || lowerText === '.ls' || lowerText === '/ls');
+
+    if (isLsAll || isLsToday) {
+        // Yêu cầu: Chỉ áp dụng khi chat 1-1, không hỗ trợ trong nhóm chat
+        if (!isPrivateChat) {
+            console.log(`[BOT] Từ chối tra cứu lịch sử nhận mã trong nhóm từ user: ${userId}`);
+            const refuseMsg =
+                '🔒 BẢO MẬT THÔNG TIN MÃ PMH 🔒\n' +
+                '━━━━━━━━━━━━━━━━━━━━━\n' +
+                '👉 Tính năng tra cứu lịch sử nhận mã ("ls", "lsall") chỉ hỗ trợ khi CHAT RIÊNG 1-1 với BOT để bảo mật thông tin mã của bạn.\n\n' +
+                '💡 Quản lý vui lòng chat riêng 1-1 với BOT:\n' +
+                '• Gõ "ls": Xem tất cả mã nhận trong ngày hôm nay (00h-23h59)\n' +
+                '• Gõ "lsall": Xem toàn bộ lịch sử phân theo từng ngày';
+            await lineClient.replyText(replyToken, refuseMsg, quoteToken);
+            return;
+        }
+
+        const quickReply = lineClient.getQuickReplyMenu();
+
+        if (isLsAll) {
+            console.log(`[BOT] Tra cứu TOÀN BỘ lịch sử nhận mã cho user: ${userId}`);
+            const allHistory = await couponService.getUserAllHistory(userId);
+            let msg = '';
+            if (!allHistory || allHistory.count === 0) {
+                msg = [
+                    '📜 TOÀN BỘ LỊCH SỬ NHẬN MÃ:',
+                    '━━━━━━━━━━━━━━━━━━━━━',
+                    'ℹ️ Bạn chưa có lịch sử nhận mã PMH nào trên hệ thống!',
+                    '━━━━━━━━━━━━━━━━━━━━━',
+                    '💡 Gõ "cp" để lấy mẫu form xin mã PMH, "tk" xem tồn kho.'
+                ].join(NL);
+            } else {
+                const groupSections = allHistory.groups.map(grp => {
+                    const lines = grp.items.map((item, idx) => {
+                        return `${idx + 1}. [${item.time}] MĐH: ${item.mdh} (Kho: ${item.maKho})${NL}   ➜ PMH ${item.loaiPMH} : ${item.code}`;
+                    }).join(NL);
+                    return `📅 Ngày ${grp.dateDisplay} (${grp.items.length} mã):${NL}${lines}`;
+                }).join(NL + NL);
+
+                msg = [
+                    '📜 TOÀN BỘ LỊCH SỬ NHẬN MÃ (PHÂN THEO NGÀY):',
+                    '━━━━━━━━━━━━━━━━━━━━━',
+                    `👤 Quản lý: ${allHistory.displayName}`,
+                    `📊 Tổng cộng: ${allHistory.count} mã đã nhận (${allHistory.groups.length} ngày)`,
+                    '━━━━━━━━━━━━━━━━━━━━━',
+                    groupSections,
+                    '━━━━━━━━━━━━━━━━━━━━━',
+                    '💡 Gõ "ls" xem riêng hôm nay, "tk" xem tồn kho.'
+                ].join(NL);
+            }
+
+            await lineClient.replyText(replyToken, msg, quoteToken, quickReply);
+            return;
+        }
+
+        // Trường hợp "ls": Xem trong ngày hôm nay
         console.log(`[BOT] Tra cứu lịch sử nhận mã hôm nay cho user: ${userId}`);
         const historyData = await couponService.getUserTodayHistory(userId);
         let historyMsg = '';
         if (!historyData || historyData.count === 0) {
             historyMsg = [
                 `📜 LỊCH SỬ NHẬN MÃ HÔM NAY (${historyData?.todayDisplay || 'HÔM NAY'}):`,
-                `━━━━━━━━━━━━━━━━━━━━━`,
-                `ℹ️ Hôm nay bạn chưa được cấp mã PMH nào!`,
-                `━━━━━━━━━━━━━━━━━━━━━`,
-                `💡 Gõ "cp" để lấy mẫu form xin mã PMH, "tk" xem tồn kho.`
+                '━━━━━━━━━━━━━━━━━━━━━',
+                'ℹ️ Hôm nay bạn chưa được cấp mã PMH nào!',
+                '━━━━━━━━━━━━━━━━━━━━━',
+                '💡 Gõ "lsall" để xem các ngày trước, "cp" lấy mẫu form, "tk" xem tồn kho.'
             ].join(NL);
         } else {
             const listLines = historyData.items.map(item => {
@@ -550,17 +605,16 @@ async function handleLineEvent(event) {
 
             historyMsg = [
                 `📜 LỊCH SỬ NHẬN MÃ HÔM NAY (${historyData.todayDisplay}):`,
-                `━━━━━━━━━━━━━━━━━━━━━`,
+                '━━━━━━━━━━━━━━━━━━━━━',
                 `👤 Quản lý: ${historyData.items[0]?.displayName || 'Bạn'}`,
-                `📊 Tổng cộng đã nhận: ${historyData.count} mã`,
-                `━━━━━━━━━━━━━━━━━━━━━`,
+                `📊 Tổng cộng đã nhận hôm nay: ${historyData.count} mã`,
+                '━━━━━━━━━━━━━━━━━━━━━',
                 listLines,
-                `━━━━━━━━━━━━━━━━━━━━━`,
-                `💡 Gõ "tk" để kiểm tra tồn kho PMH.`
+                '━━━━━━━━━━━━━━━━━━━━━',
+                '💡 Gõ "lsall" xem toàn bộ lịch sử, "tk" kiểm tra tồn kho.'
             ].join(NL);
         }
 
-        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu() : null;
         await lineClient.replyText(replyToken, historyMsg, quoteToken, quickReply);
         return;
     }
@@ -584,12 +638,13 @@ async function handleLineEvent(event) {
                 '• "/tukhoa": Xem danh sách từ khoá tự động.',
                 '• "tk": Xem thống kê tồn kho các loại PMH.',
                 '• "cp": Xem cú pháp đăng ký hiện tại.',
-                '• "ls": Xem lịch sử nhận mã trong ngày hôm nay.'
+                '• "ls": Xem lịch sử nhận mã hôm nay (chỉ chat 1-1).',
+                '• "lsall": Xem toàn bộ lịch sử phân theo ngày (chỉ chat 1-1).'
             ].join(NL);
             await lineClient.replyText(replyToken, guide, quoteToken, quickReply);
         } else {
             const syntax = await Firebase.getSyntax();
-            await lineClient.replyText(replyToken, syntax || '💡 Gõ "cp" để lấy mẫu xin PMH, "/tukhoa" xem danh sách từ khoá, "ls" xem lịch sử nhận mã hôm nay.', quoteToken, quickReply);
+            await lineClient.replyText(replyToken, syntax || '💡 Gõ "cp" lấy mẫu xin PMH, "ls" xem lịch sử hôm nay (chat 1-1), "lsall" xem toàn bộ lịch sử, "/tukhoa" xem danh sách từ khoá.', quoteToken, quickReply);
         }
         return;
     }
