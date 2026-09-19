@@ -504,8 +504,8 @@ function renderDashboardStockList() {
 
     if (emptyState) emptyState.classList.add('hidden');
 
-    // GIỚI HẠN 10 DÒNG MỖI TRANG & PHÂN TRANG THÔNG MINH
-    const pageSize = 10;
+    // GIỚI HẠN TỐI ĐA 5 DÒNG MỖI TRANG & PHÂN TRANG THÔNG MINH
+    const pageSize = 5;
     const totalPages = Math.ceil(filteredTypes.length / pageSize) || 1;
     if (!appState.dashboardStockPage || appState.dashboardStockPage < 1) appState.dashboardStockPage = 1;
     if (appState.dashboardStockPage > totalPages) appState.dashboardStockPage = totalPages;

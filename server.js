@@ -16,15 +16,24 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 1. Phục vụ Web Quản Trị trực tiếp từ thư mục /admin
-app.use(express.static(path.join(__dirname, 'admin')));
+// 1. Phục vụ Web Quản Trị trực tiếp từ thư mục /admin (chống cache trình duyệt khi có cập nhật mới)
+app.use(express.static(path.join(__dirname, 'admin'), {
+    maxAge: 0,
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+    }
+}));
 
 // 2. Health check endpoint
 app.get('/api/health', async (req, res) => {
     const syntax = await Firebase.getSyntax();
     res.json({
         status: 'OK',
-        version: '1.3.7',
+        version: '1.3.8',
         botName: 'DM_Tây Nam Bộ',
         tokenPrefix: CONFIG.CHANNEL_ACCESS_TOKEN.slice(0, 10),
         service: 'PMH LINE BOT & Web Admin',
