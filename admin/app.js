@@ -2380,54 +2380,72 @@ function renderKeywordsGrid() {
         }
 
         const matchBadge = kw.matchType === 'CONTAINS'
-            ? '<span class="status-badge" style="background: #E0F2FE; color: #0369A1; border: 1px solid #BAE6FD; font-size: 0.74rem;">Chứa từ khoá</span>'
-            : '<span class="status-badge" style="background: #EEF2FF; color: #4F46E5; border: 1px solid #C7D2FE; font-size: 0.74rem;">Chính xác</span>';
+            ? '<span class="status-badge" style="background: #E0F2FE; color: #0284C7; border: 1px solid #BAE6FD; font-size: 0.7rem; padding: 1px 6px; line-height: 1.3;">Chứa từ</span>'
+            : '<span class="status-badge" style="background: #EEF2FF; color: #4F46E5; border: 1px solid #C7D2FE; font-size: 0.7rem; padding: 1px 6px; line-height: 1.3;">Chính xác</span>';
 
-        // Danh sách ảnh đính kèm
-        let imagesHtml = '';
+        // Thumbnails thu gọn (nằm cùng hàng với nội dung)
+        let imageHtml = '';
         if (rawUrls.length > 0) {
-            const thumbs = rawUrls.map(url => `
-                <a href="${url}" target="_blank" title="Xem ảnh gốc" style="display: block; width: 44px; height: 44px; border-radius: 8px; overflow: hidden; border: 1px solid #E2E8F0; flex-shrink: 0;">
-                    <img src="${url}" alt="Ảnh đính kèm" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://placehold.co/44x44?text=ERR'">
-                </a>
-            `).join('');
-            imagesHtml = `
-                <div style="display: flex; gap: 6px; align-items: center; margin-top: 10px; overflow-x: auto; padding-bottom: 2px;">
+            const maxVisible = 2;
+            const visibleUrls = rawUrls.slice(0, maxVisible);
+            const remaining = rawUrls.length - maxVisible;
+
+            const thumbs = visibleUrls.map((url, idx) => {
+                const isLastWithMore = (idx === maxVisible - 1 && remaining > 0);
+                return `
+                    <div style="position: relative; width: 42px; height: 42px; flex-shrink: 0; border-radius: 6px; overflow: hidden; border: 1px solid #CBD5E1; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+                        <a href="${url}" target="_blank" title="Xem ảnh gốc (${rawUrls.length} ảnh)" style="display: block; width: 100%; height: 100%;">
+                            <img src="${url}" alt="Ảnh" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://placehold.co/42x42?text=IMG'">
+                        </a>
+                        ${isLastWithMore ? `<span style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.78); color: #FFF; font-size: 0.65rem; font-weight: 700; text-align: center; line-height: 14px;">+${remaining}</span>` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            imageHtml = `
+                <div style="display: flex; gap: 5px; align-items: center; flex-shrink: 0;">
                     ${thumbs}
-                    <span style="font-size: 0.75rem; color: #64748B; margin-left: 2px;">(${rawUrls.length} ảnh)</span>
                 </div>
             `;
         }
 
+        const replyContent = kw.reply_text
+            ? escapeHtml(kw.reply_text)
+            : '<span style="color: #94A3B8; font-style: italic;">(Không kèm văn bản, chỉ gửi ảnh)</span>';
+
         card.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px;">
-                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap;">
                     <span class="keyword-pill">#${escapeHtml(kw.keyword)}</span>
                     ${matchBadge}
                 </div>
-                <div class="table-actions">
-                    <button class="btn-icon" title="${isActive ? 'Tạm tắt từ khoá' : 'Bật từ khoá'}" onclick="toggleKeywordStatus('${kw.id}')" style="color: ${isActive ? '#16A34A' : '#64748B'};">
+                <div class="table-actions" style="margin: 0; gap: 2px;">
+                    <button class="btn-icon" title="${isActive ? 'Tạm tắt từ khoá' : 'Bật từ khoá'}" onclick="toggleKeywordStatus('${kw.id}')" style="color: ${isActive ? '#16A34A' : '#94A3B8'}; font-size: 0.95rem; width: 28px; height: 28px;">
                         <i class="fa-solid ${isActive ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
                     </button>
-                    <button class="btn-icon" title="Chỉnh sửa từ khoá" onclick="openAddKeywordModal('${kw.id}')">
+                    <button class="btn-icon" title="Chỉnh sửa từ khoá" onclick="openAddKeywordModal('${kw.id}')" style="font-size: 0.82rem; width: 28px; height: 28px;">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
-                    <button class="btn-icon danger" title="Xóa từ khoá" onclick="deleteKeywordPrompt('${kw.id}')">
+                    <button class="btn-icon danger" title="Xóa từ khoá" onclick="deleteKeywordPrompt('${kw.id}')" style="font-size: 0.82rem; width: 28px; height: 28px;">
                         <i class="fa-solid fa-trash-can"></i>
                     </button>
                 </div>
             </div>
 
-            <div class="keyword-reply-text" title="${escapeHtml(kw.reply_text || '')}">
-                ${escapeHtml(kw.reply_text || '')}
+            <div style="display: flex; gap: 8px; align-items: center; margin: 4px 0 6px 0;">
+                <div class="keyword-reply-text" title="${escapeHtml(kw.reply_text || '')}">
+                    ${replyContent}
+                </div>
+                ${imageHtml}
             </div>
 
-            ${imagesHtml}
-
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #E2E8F0; font-size: 0.76rem; color: #94A3B8;">
-                <span>${kw.updatedAt ? formatDate(kw.updatedAt) : ''}</span>
-                <span style="color: ${isActive ? '#16A34A' : '#94A3B8'}; font-weight: 500;">
-                    ${isActive ? '🟢 Đang hoạt động' : '⚪ Đang tắt'}
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; padding-top: 6px; border-top: 1px dashed #E2E8F0; font-size: 0.72rem; color: #94A3B8;">
+                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                    <i class="fa-regular fa-clock" style="font-size: 0.7rem;"></i> ${kw.updatedAt ? formatDate(kw.updatedAt) : ''}
+                </span>
+                <span style="display: inline-flex; align-items: center; gap: 5px; color: ${isActive ? '#16A34A' : '#94A3B8'}; font-weight: 500;">
+                    <span style="width: 6px; height: 6px; border-radius: 50%; background: ${isActive ? '#16A34A' : '#94A3B8'}; display: inline-block;"></span>
+                    ${isActive ? 'Hoạt động' : 'Tạm tắt'}
                 </span>
             </div>
         `;

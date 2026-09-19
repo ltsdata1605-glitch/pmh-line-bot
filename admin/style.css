@@ -1844,24 +1844,24 @@ code {
 .keywords-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 18px;
-    margin-top: 16px;
+    gap: 12px;
+    margin-top: 14px;
 }
 
 .keyword-card {
     background: #FFFFFF;
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: 18px;
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     transition: all var(--transition-normal);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
 .keyword-card:hover {
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
     transform: translateY(-2px);
     border-color: #CBD5E1;
 }
@@ -1870,31 +1870,34 @@ code {
     display: inline-flex;
     align-items: center;
     font-family: 'JetBrains Mono', monospace, sans-serif;
-    font-size: 0.92rem;
+    font-size: 0.84rem;
     font-weight: 700;
     color: #4F46E5;
     background: #EEF2FF;
     border: 1px solid #C7D2FE;
-    padding: 3px 10px;
+    padding: 2px 8px;
     border-radius: 6px;
     letter-spacing: -0.2px;
 }
 
 .keyword-reply-text {
     color: #334155;
-    font-size: 0.88rem;
-    line-height: 1.55;
+    font-size: 0.82rem;
+    line-height: 1.45;
     white-space: pre-wrap;
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
     background: #F8FAFC;
-    padding: 10px 12px;
-    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #F1F5F9;
     border-left: 3px solid #6366F1;
-    margin: 8px 0;
+    margin: 0;
+    flex: 1;
+    min-width: 0;
 }
 
 .keyword-images-grid {
@@ -1907,6 +1910,38 @@ code {
 .image-upload-dropzone:hover {
     border-color: #6366F1 !important;
     background: #EEF2FF !important;
+}
+
+.search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 240px;
+}
+
+.search-box i {
+    position: absolute;
+    left: 12px;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 8px 14px 8px 34px;
+    background: #F8FAFC;
+    border: 1px solid #CBD5E1;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 0.86rem;
+    outline: none;
+    transition: all var(--transition-fast);
+}
+
+.search-box input:focus {
+    border-color: var(--primary);
+    background: #FFFFFF;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
 }
 
 /* ==================== SHARED METRICS GRID & METRIC CARDS ==================== */
