@@ -67,6 +67,162 @@ function isAdminApprovalCommand(text) {
 }
 
 /**
+ * Lấy tất cả các tên hiển thị tiềm năng của người dùng từ nhiều nguồn
+ * (Profile LINE, Lịch sử yêu cầu, Lịch sử phiếu đã phát, Danh sách Admin)
+ */
+async function getUserDisplayNameCandidates(userId) {
+    const candidates = new Set();
+    if (!userId) return [];
+
+    // 1. Profile LINE API
+    try {
+        const lineName = await lineClient.getDisplayName(userId);
+        if (lineName && lineName !== 'Quản lý') {
+            candidates.add(lineName.trim());
+        }
+    } catch (e) {}
+
+    // 2. Lịch sử Requests trong Firebase
+    try {
+        const requests = await Firebase.getRequests();
+        if (requests && requests.length > 0) {
+            const myReqs = requests.filter(r => r.userId === userId && r.displayName);
+            myReqs.slice(-30).forEach(r => {
+                if (r.displayName && r.displayName !== 'Quản lý') {
+                    candidates.add(r.displayName.trim());
+                }
+            });
+        }
+    } catch (e) {}
+
+    // 3. Lịch sử Coupons trong Firebase
+    try {
+        const coupons = await Firebase.getCoupons();
+        if (coupons && coupons.length > 0) {
+            coupons.forEach(c => {
+                if (c && c.recipientId === userId && c.recipient && c.recipient !== 'Quản lý') {
+                    candidates.add(c.recipient.trim());
+                }
+            });
+        }
+    } catch (e) {}
+
+    // 4. Danh sách Admin trong Firebase
+    try {
+        const admins = await Firebase.getAdmins();
+        if (admins && admins.length > 0) {
+            admins.forEach(a => {
+                if ((a.userId === userId || a.lineId === userId) && a.name) {
+                    candidates.add(a.name.trim());
+                }
+            });
+        }
+    } catch (e) {}
+
+    return Array.from(candidates);
+}
+
+/**
+ * Tách nội dung tin nhắn chuyển tiếp thành từng khối chứa "➜ PMH"
+ */
+function parsePmhBlocks(text) {
+    if (!text) return [];
+
+    // Tách theo vạch phân cách phổ biến
+    let rawBlocks = text.split(/[━─—\-\=_~]{3,}/).map(b => b.trim()).filter(Boolean);
+
+    // Nếu không có vạch phân cách mà có nhiều "➜ PMH", tách theo dòng trước "➜ PMH"
+    if (rawBlocks.length <= 1 && (text.match(/➜\s*PMH/gi) || []).length > 1) {
+        const lines = text.split(/\r?\n/);
+        const entries = [];
+        let currentEntry = [];
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (i + 1 < lines.length && /➜\s*PMH/i.test(lines[i + 1])) {
+                if (currentEntry.length > 0) {
+                    entries.push(currentEntry.join('\n'));
+                    currentEntry = [];
+                }
+            }
+            if (line) currentEntry.push(line);
+        }
+        if (currentEntry.length > 0) entries.push(currentEntry.join('\n'));
+        if (entries.length > 1) rawBlocks = entries;
+    }
+
+    // Lọc chỉ giữ các khối có chứa "➜ PMH"
+    return rawBlocks.filter(block => {
+        if (!/➜\s*PMH/i.test(block)) return false;
+        if (block.includes('Hãy chuyển tiếp tin nhắn này') && !block.includes(':')) return false;
+        return true;
+    });
+}
+
+/**
+ * Kiểm tra xem một khối mã PMH có thuộc về người dùng đang chuyển tiếp không
+ */
+function isBlockBelongToUser(block, candidateNames) {
+    if (!block || !candidateNames || candidateNames.length === 0) return false;
+
+    // Tìm dòng tên (thường nằm ngay trước "➜ PMH")
+    const lines = block.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    let nameInBlock = '';
+    for (let i = 0; i < lines.length; i++) {
+        if (/➜\s*PMH/i.test(lines[i])) {
+            if (i > 0) {
+                nameInBlock = lines[i - 1];
+            } else {
+                nameInBlock = lines[i];
+            }
+            break;
+        }
+    }
+
+    // Bỏ qua tiêu đề
+    if (nameInBlock.includes('ADMIN ĐÃ DUYỆT') || nameInBlock.includes('BOT đã tự động') || nameInBlock.includes('THÔNG BÁO')) {
+        nameInBlock = '';
+    }
+
+    const removeAccents = (str) => {
+        return String(str || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[đĐ]/g, 'd')
+            .toLowerCase()
+            .trim();
+    };
+
+    const cleanBlockText = removeAccents(block);
+    const cleanBlockName = removeAccents(nameInBlock);
+
+    for (const cand of candidateNames) {
+        if (!cand) continue;
+        const cleanCand = removeAccents(cand);
+        if (!cleanCand) continue;
+
+        // 1. Khớp chính xác hoặc chứa trong dòng tên
+        if (cleanBlockName && (cleanBlockName.includes(cleanCand) || cleanCand.includes(cleanBlockName))) {
+            return true;
+        }
+
+        // 2. Khớp trong toàn bộ khối text
+        if (cleanBlockText.includes(cleanCand)) {
+            return true;
+        }
+
+        // 3. Khớp theo từng từ chính (nếu tên có từ 2 từ trở lên)
+        const candWords = cleanCand.split(/[\s_\-]+/).filter(w => w.length >= 2);
+        if (candWords.length >= 2) {
+            const matchCount = candWords.filter(w => cleanBlockText.includes(w)).length;
+            if (matchCount >= 2) return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Xử lý sự kiện Webhook từ LINE
  */
 async function handleLineEvent(event) {
@@ -149,45 +305,38 @@ async function handleLineEvent(event) {
 
     // 1.4 Hỗ trợ lọc danh sách phát mã của Quản lý (Chuyển tiếp tin nhắn riêng cho BOT)
     if (isPrivateChat && text.includes('➜ PMH')) {
-        let displayName = await lineClient.getDisplayName(userId);
-        if (!displayName || displayName === 'Quản lý') {
-            const requests = await Firebase.getRequests();
-            const pastReq = requests.slice().reverse().find(r => r.userId === userId && r.displayName);
-            if (pastReq) displayName = pastReq.displayName;
+        console.log(`[BOT] Nhận tin nhắn chuyển tiếp lọc PMH từ user: ${userId}`);
+
+        // Lấy tất cả tên ứng viên của user từ nhiều nguồn (LINE Profile, Lịch sử Requests, Lịch sử Coupons, Admins)
+        const candidateNames = await getUserDisplayNameCandidates(userId);
+        let primaryDisplayName = candidateNames[0] || await lineClient.getDisplayName(userId);
+        if (!primaryDisplayName || primaryDisplayName === 'Quản lý') {
+            primaryDisplayName = 'bạn';
         }
 
-        const blocks = text.split(/[━─—\-\=]{4,}/);
+        // Phân tích các khối tin nhắn chứa "➜ PMH"
+        const blocks = parsePmhBlocks(text);
         const matchedBlocks = [];
-        const lowerDisplayName = (displayName || '').toLowerCase().trim();
 
-        for (let i = 0; i < blocks.length; i++) {
-            const block = blocks[i].trim();
-            if (!block) continue;
-
-            // Bỏ qua dòng tiêu đề và dòng hướng dẫn
-            if (block.includes('Admin đã duyệt') ||
-                block.includes('ADMIN ĐÃ DUYỆT') ||
-                block.includes('BOT đã tự động duyệt') ||
-                block.includes('Hãy chuyển tiếp tin nhắn này') ||
-                block.includes('lọc nhanh PMH')) {
-                continue;
-            }
-
-            const lines = block.split(/\r?\n/);
-            if (lines.length > 0) {
-                const firstLine = lines[0].trim().toLowerCase();
-                if (lowerDisplayName && (firstLine.includes(lowerDisplayName) || lowerDisplayName.includes(firstLine))) {
-                    matchedBlocks.push(block);
-                }
+        for (const block of blocks) {
+            if (isBlockBelongToUser(block, candidateNames)) {
+                matchedBlocks.push(block);
             }
         }
 
         if (matchedBlocks.length > 0) {
-            const replyMsg = `🎯 MÃ PMH CỦA BẠN (${displayName}):\n━━━━━━━━━━━━━\n` + matchedBlocks.join('\n━━━━━━━━━━━━━\n');
+            const replyMsg =
+                `🎯 MÃ PMH CỦA BẠN (${primaryDisplayName}):\n` +
+                `━━━━━━━━━━━━━━━━━━━━━\n` +
+                matchedBlocks.join('\n━━━━━━━━━━━━━━━━━━━━━\n');
             await lineClient.replyText(replyToken, replyMsg, quoteToken);
             return;
         } else {
-            await lineClient.replyText(replyToken, `❌ Không tìm thấy mã PMH nào khớp với tên LINE "${displayName || 'của bạn'}" trong danh sách trên.`, quoteToken);
+            const replyMsg =
+                `❌ Không tìm thấy mã PMH nào liên quan đến tên LINE "${primaryDisplayName}" của bạn trong danh sách trên.\n` +
+                `━━━━━━━━━━━━━━━━━━━━━\n` +
+                `👉 Quản lý vui lòng kiểm tra lại tên hiển thị khi gửi đơn trong nhóm chat hoặc liên hệ Admin nếu có sai sót.`;
+            await lineClient.replyText(replyToken, replyMsg, quoteToken);
             return;
         }
     }
@@ -469,7 +618,25 @@ async function handleLineEvent(event) {
     }
 
     // 6. Kiểm tra Form xin mã PMH từ Quản lý
-    if (looksLikeCouponForm(text)) {
+    const isCouponForm = looksLikeCouponForm(text) ||
+        (!text.includes('➜ PMH') && lowerText.includes('pmh') && (lowerText.includes('kho') || lowerText.includes('mdh') || lowerText.includes('mđh')));
+
+    if (isCouponForm) {
+        // Yêu cầu: Không hỗ trợ gửi form xin cấp mã PMH khi chat 1-1 với BOT
+        if (isPrivateChat) {
+            console.log(`[BOT] Từ chối nhận form xin PMH qua chat 1-1 từ user: ${userId}`);
+            const refuseMsg =
+                '⚠️ BOT KHÔNG HỖ TRỢ NHẬN FORM XIN MÃ KHI CHAT RIÊNG 1-1 ⚠️\n' +
+                '━━━━━━━━━━━━━━━━━━━━━\n' +
+                '👉 Quản lý vui lòng gửi form đăng ký xin cấp mã PMH vào NHÓM CHAT QUẢN LÝ để được hệ thống kiểm tra và phát mã.\n\n' +
+                '💡 Khi chat riêng 1-1 với BOT, bạn có thể:\n' +
+                '• Gõ "cp": Lấy mẫu form cú pháp xin mã\n' +
+                '• Gõ "tk": Tra cứu số lượng tồn kho PMH\n' +
+                '• Chuyển tiếp danh sách phát mã ("➜ PMH") để BOT lọc riêng mã của bạn.';
+            await lineClient.replyText(replyToken, refuseMsg, quoteToken);
+            return;
+        }
+
         await handleCouponRequest({
             text,
             userId,
