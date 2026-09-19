@@ -92,6 +92,7 @@ let appState = {
     keywordSearch: '',
     settings: { autoApprove: false },
     dashboardStockPage: 1,
+    couponsPage: 1,
     firebaseConfig: { ...DEFAULT_FIREBASE_CONFIG },
     filter: {
         search: '',
@@ -627,6 +628,8 @@ function filterCouponsByType(typeName) {
     const statusSelect = document.getElementById('filter-status-select');
     if (statusSelect) statusSelect.value = 'ALL';
 
+    appState.couponsPage = 1;
+    renderCouponsTable();
     switchTab('coupons');
 }
 
@@ -635,6 +638,7 @@ function handleCouponFilter() {
     appState.filter.search = (document.getElementById('coupon-search-input').value || '').trim().toLowerCase();
     appState.filter.type = document.getElementById('filter-type-select').value;
     appState.filter.status = document.getElementById('filter-status-select').value;
+    appState.couponsPage = 1;
     renderCouponsTable();
 }
 
@@ -643,8 +647,11 @@ function renderCouponsTable() {
     const emptyState = document.getElementById('coupons-empty-state');
     const filterCountEl = document.getElementById('filter-count-display');
     const totalCountEl = document.getElementById('total-count-display');
+    const paginationEl = document.getElementById('coupons-pagination');
+    const paginationInfo = document.getElementById('coupons-pagination-info');
+    const paginationButtons = document.getElementById('coupons-pagination-buttons');
 
-    totalCountEl.innerText = appState.coupons.length;
+    const totalCouponsCount = appState.coupons.length;
 
     // Lọc dữ liệu
     const filtered = appState.coupons.filter(c => {
@@ -671,20 +678,45 @@ function renderCouponsTable() {
         return true;
     });
 
-    filterCountEl.innerText = filtered.length;
+    // Cấu hình phân trang: Chuẩn tối đa 10 dòng/trang
+    const pageSize = 10;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    if (!appState.couponsPage || appState.couponsPage < 1) appState.couponsPage = 1;
+    if (appState.couponsPage > totalPages) appState.couponsPage = totalPages;
+
+    const startIndex = (appState.couponsPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, filtered.length);
+    const paginatedItems = filtered.slice(startIndex, endIndex);
+
+    // Cập nhật hiển thị số lượng ở thanh meta bar
+    if (filterCountEl && totalCountEl) {
+        if (filtered.length === 0) {
+            filterCountEl.innerText = '0';
+            totalCountEl.innerHTML = `${totalCouponsCount} mã`;
+        } else if (filtered.length === totalCouponsCount) {
+            filterCountEl.innerText = `${startIndex + 1} - ${endIndex}`;
+            totalCountEl.innerHTML = `${totalCouponsCount} mã`;
+        } else {
+            filterCountEl.innerText = `${startIndex + 1} - ${endIndex}`;
+            totalCountEl.innerHTML = `<strong>${filtered.length}</strong> mã <span style="font-size: 0.85em; color: var(--text-muted); font-weight: normal;">(Tổng kho: ${totalCouponsCount} mã)</span>`;
+        }
+    }
+
     tbody.innerHTML = '';
 
     if (filtered.length === 0) {
         emptyState.classList.remove('hidden');
+        if (paginationEl) paginationEl.style.display = 'none';
     } else {
         emptyState.classList.add('hidden');
 
-        filtered.forEach((c, index) => {
+        paginatedItems.forEach((c, index) => {
             const tr = document.createElement('tr');
             const isUnused = c.status === 'UNUSED';
+            const stt = startIndex + index + 1;
 
             tr.innerHTML = `
-                <td class="text-muted">${index + 1}</td>
+                <td class="text-muted">${stt}</td>
                 <td><span class="coupon-code-pill">${c.code}</span></td>
                 <td><strong style="color: var(--primary-light);">${c.type}</strong></td>
                 <td>
@@ -710,6 +742,54 @@ function renderCouponsTable() {
             `;
             tbody.appendChild(tr);
         });
+
+        // Render thanh phân trang dưới bảng
+        if (paginationEl && paginationInfo && paginationButtons) {
+            if (filtered.length > pageSize) {
+                paginationEl.style.display = 'flex';
+                paginationInfo.innerHTML = `Hiển thị <strong>${startIndex + 1} - ${endIndex}</strong> trên tổng số <strong>${filtered.length}</strong> mã`;
+
+                let btnsHtml = `
+                    <button class="btn btn-secondary btn-sm" onclick="goToCouponsPage(1)" ${appState.couponsPage <= 1 ? 'disabled style="opacity: 0.4; cursor: not-allowed; padding: 4px 8px; font-size: 0.8rem;"' : 'style="padding: 4px 8px; font-size: 0.8rem;"'} title="Về trang đầu (Trang 1)">
+                        <i class="fa-solid fa-angles-left"></i> Đầu
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="changeCouponsPage(-1)" ${appState.couponsPage <= 1 ? 'disabled style="opacity: 0.4; cursor: not-allowed; padding: 4px 10px; font-size: 0.8rem;"' : 'style="padding: 4px 10px; font-size: 0.8rem;"'}>
+                        <i class="fa-solid fa-chevron-left"></i> Trước
+                    </button>
+                    <div style="display: flex; align-items: center; gap: 4px; font-size: 0.82rem; font-weight: 600; color: var(--text-dark); padding: 0 4px;">
+                        <span>Trang</span>
+                        <input type="number" min="1" max="${totalPages}" value="${appState.couponsPage}" 
+                            onchange="goToCouponsPage(this.value)" 
+                            onkeydown="if(event.key==='Enter') goToCouponsPage(this.value)"
+                            style="width: 52px; text-align: center; padding: 3px 4px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.82rem; font-weight: 600; background: var(--bg-card); color: var(--text-dark);" 
+                            title="Nhập số trang và nhấn Enter để chuyển nhanh">
+                        <span>/ ${totalPages}</span>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="changeCouponsPage(1)" ${appState.couponsPage >= totalPages ? 'disabled style="opacity: 0.4; cursor: not-allowed; padding: 4px 10px; font-size: 0.8rem;"' : 'style="padding: 4px 10px; font-size: 0.8rem;"'}>
+                        Sau <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="goToCouponsPage(${totalPages})" ${appState.couponsPage >= totalPages ? 'disabled style="opacity: 0.4; cursor: not-allowed; padding: 4px 8px; font-size: 0.8rem;"' : 'style="padding: 4px 8px; font-size: 0.8rem;"'} title="Đến trang cuối (Trang ${totalPages})">
+                        Cuối <i class="fa-solid fa-angles-right"></i>
+                    </button>
+                `;
+                paginationButtons.innerHTML = btnsHtml;
+            } else {
+                paginationEl.style.display = 'none';
+            }
+        }
+    }
+}
+
+function changeCouponsPage(delta) {
+    appState.couponsPage = (appState.couponsPage || 1) + delta;
+    renderCouponsTable();
+}
+
+function goToCouponsPage(pageNum) {
+    const page = parseInt(pageNum, 10);
+    if (!isNaN(page)) {
+        appState.couponsPage = page;
+        renderCouponsTable();
     }
 }
 

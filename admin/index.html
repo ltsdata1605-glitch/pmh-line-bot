@@ -13,7 +13,7 @@
     <!-- SheetJS (Excel) Offline -->
     <script src="xlsx.full.min.js"></script>
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=1.3.9">
+    <link rel="stylesheet" href="style.css?v=1.4.0">
 </head>
 <body>
 
@@ -349,7 +349,7 @@
                 <!-- Summary sub-bar -->
                 <div class="table-meta-bar">
                     <div class="meta-count">
-                        Hiển thị <strong id="filter-count-display">0</strong> / <span id="total-count-display">0</span> mã
+                        Hiển thị <strong id="filter-count-display">0</strong> / <span id="total-count-display">0 mã</span>
                     </div>
                     <div class="table-batch-actions">
                         <button class="btn btn-danger btn-sm" id="btn-clear-all" onclick="clearAllCouponsPrompt()" title="Xoá vĩnh viễn tất cả các mã coupon hiện có trong kho">
@@ -384,6 +384,16 @@
                                 <!-- Rendered by JS -->
                             </tbody>
                         </table>
+                    </div>
+
+                    <!-- Phân trang 10 dòng kho mã coupon -->
+                    <div id="coupons-pagination" style="display: none; justify-content: space-between; align-items: center; margin-top: 14px; padding: 10px 4px 0 4px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 10px;">
+                        <div id="coupons-pagination-info" style="font-size: 0.85rem; color: var(--text-muted);">
+                            <!-- Rendered by JS -->
+                        </div>
+                        <div id="coupons-pagination-buttons" style="display: flex; align-items: center; gap: 6px;">
+                            <!-- Rendered by JS -->
+                        </div>
                     </div>
 
                     <!-- Empty state placeholder -->
@@ -1302,6 +1312,6 @@ NDYXIKJL0L	ML200..." rows="8" oninput="previewBulkImport()"></textarea>
     <div id="toast-container" class="toast-container"></div>
 
     <!-- Application Logic Scripts -->
-    <script src="app.js?v=1.3.9"></script>
+    <script src="app.js?v=1.4.0"></script>
 </body>
 </html>
