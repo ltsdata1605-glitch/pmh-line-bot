@@ -2250,6 +2250,19 @@ code {
     align-items: center;
 }
 
+.stock-warning-chips::-webkit-scrollbar {
+    width: 6px;
+}
+
+.stock-warning-chips::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 4px;
+}
+
+.stock-warning-chips::-webkit-scrollbar-thumb:hover {
+    background: #94A3B8;
+}
+
 .warning-chip {
     display: inline-flex;
     align-items: center;

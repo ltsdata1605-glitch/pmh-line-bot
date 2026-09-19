@@ -424,9 +424,17 @@ function renderDashboardStockList() {
 
             warningBanner.innerHTML = `
                 <div class="stock-warning-header">
-                    <div class="stock-warning-title">
-                        <i class="fa-solid fa-triangle-exclamation" style="font-size: 1.15rem; color: #EA580C;"></i>
-                        <span>Cảnh Báo Tồn Kho Sắp Hết (${totalAlerts} loại cần chú ý)</span>
+                    <div>
+                        <div class="stock-warning-title">
+                            <i class="fa-solid fa-triangle-exclamation" style="font-size: 1.15rem; color: #EA580C;"></i>
+                            <span>Cảnh Báo Tồn Kho Sắp Hết (${totalAlerts} loại cần chú ý)</span>
+                        </div>
+                        <div style="display: flex; gap: 12px; margin-top: 4px; font-size: 0.78rem; flex-wrap: wrap;">
+                            ${criticalList.length > 0 ? `<span style="color: #DC2626; font-weight: 600;"><span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #DC2626; margin-right: 4px;"></span>${criticalList.length} loại &lt; 10 mã (Khẩn cấp)</span>` : ''}
+                            ${highList.length > 0 ? `<span style="color: #EA580C; font-weight: 600;"><span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #EA580C; margin-right: 4px;"></span>${highList.length} loại &lt; 20 mã (Cần nạp)</span>` : ''}
+                            ${warningList.length > 0 ? `<span style="color: #D97706; font-weight: 600;"><span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #D97706; margin-right: 4px;"></span>${warningList.length} loại &lt; 30 mã (Sắp hết)</span>` : ''}
+                            ${outList.length > 0 ? `<span style="color: #475569; font-weight: 600;"><span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #475569; margin-right: 4px;"></span>${outList.length} loại 0 mã</span>` : ''}
+                        </div>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <button class="btn btn-primary btn-sm" onclick="openBulkImportModal()" style="font-size: 0.8rem; padding: 5px 12px;">
@@ -434,7 +442,7 @@ function renderDashboardStockList() {
                         </button>
                     </div>
                 </div>
-                <div class="stock-warning-chips">
+                <div class="stock-warning-chips" style="max-height: 108px; overflow-y: auto; padding-right: 4px;">
                     ${chipsHtml}
                 </div>
             `;
