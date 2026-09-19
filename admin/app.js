@@ -310,6 +310,9 @@ function switchTab(tabId) {
         titleEl.innerText = 'Nhật Ký Thao Tác Quản Trị';
         descEl.innerText = 'Ghi vết toàn bộ hành động nạp mã, xoá mã, đổi cú pháp và quản lý hệ thống';
         loadAuditLogsFromFirebase();
+    } else if (tabId === 'guide') {
+        titleEl.innerText = 'Giới Thiệu & Nguyên Tắc Hoạt Động';
+        descEl.innerText = 'Cẩm nang toàn diện: Tính năng, nguyên tắc vận hành và luồng xử lý tự động của hệ thống PMH Cloud';
     }
 }
 

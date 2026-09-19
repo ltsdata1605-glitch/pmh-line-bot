@@ -13,7 +13,7 @@
     <!-- SheetJS (Excel) Offline -->
     <script src="xlsx.full.min.js"></script>
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=1.4.0">
+    <link rel="stylesheet" href="style.css?v=1.4.1">
 </head>
 <body>
 
@@ -116,6 +116,10 @@
                     <i class="fa-solid fa-clock-rotate-left"></i>
                     <span>Nhật Ký Hoạt Động</span>
                     <span class="badge badge-stock" id="badge-total-logs" style="background: #F1F5F9; color: #475569; border-color: #CBD5E1;">0</span>
+                </button>
+                <button class="nav-item" data-tab="guide" onclick="switchTab('guide')">
+                    <i class="fa-solid fa-book-open"></i>
+                    <span>Giới Thiệu & Nguyên Tắc</span>
                 </button>
             </nav>
 
@@ -854,6 +858,389 @@
                     </div>
                 </div>
             </section>
+
+            <!-- ==================== TAB 8: GIỚI THIỆU & NGUYÊN TẮC HOẠT ĐỘNG ==================== -->
+            <section id="tab-guide" class="tab-pane">
+                <!-- Hero Header Banner -->
+                <div style="background: linear-gradient(135deg, #4F46E5 0%, #6366F1 50%, #8B5CF6 100%); color: #FFFFFF; border-radius: var(--radius-lg); padding: 30px; margin-bottom: 24px; box-shadow: 0 12px 30px -8px rgba(79, 70, 229, 0.35); position: relative; overflow: hidden;">
+                    <div style="position: absolute; right: -20px; top: -20px; font-size: 160px; color: rgba(255, 255, 255, 0.08); pointer-events: none;">
+                        <i class="fa-solid fa-book-open"></i>
+                    </div>
+                    <div style="position: relative; z-index: 1; max-width: 900px;">
+                        <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(255, 255, 255, 0.18); backdrop-filter: blur(8px); padding: 5px 14px; border-radius: 9999px; font-size: 0.82rem; font-weight: 600; margin-bottom: 14px; letter-spacing: 0.5px;">
+                            <i class="fa-solid fa-bolt"></i> NỀN TẢNG CLOUD THỜI GIAN THỰC ĐỘC LẬP
+                        </div>
+                        <h2 style="font-size: 1.75rem; font-weight: 800; margin-bottom: 10px; line-height: 1.3;">
+                            Hệ Thống PMH LINE Bot & Web Admin Cloud
+                        </h2>
+                        <p style="font-size: 0.95rem; opacity: 0.92; line-height: 1.6; margin-bottom: 20px;">
+                            Giải pháp tự động hóa toàn diện quy trình tiếp nhận form, phân loại, phê duyệt và cấp phát mã coupon PMH siêu tốc kết nối trực tiếp với <strong>Firebase Realtime Database (Singapore - Ping ~50ms)</strong>. Hệ thống đã tách rời 100% khỏi Google Apps Script, chạy ổn định 24/7 trên Cloud, chống spam và chống trùng lặp mã đơn hàng tuyệt đối.
+                        </p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            <span style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.2); padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;">
+                                <i class="fa-solid fa-server"></i> Node.js Express 24/7
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.2); padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;">
+                                <i class="fa-solid fa-database"></i> Firebase Realtime DB (~50ms)
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.2); padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;">
+                                <i class="fa-brands fa-line"></i> LINE Messaging API
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.2); padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;">
+                                <i class="fa-solid fa-rotate"></i> Server-Sent Events (Live Realtime)
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.2); padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;">
+                                <i class="fa-solid fa-shield-halved"></i> Chống Trùng Đơn & Spam
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KHỐI 1: QUY TRÌNH PHÁT MÃ PMH TỰ ĐỘNG (CORE WORKFLOW) -->
+                <div class="content-section" style="margin-bottom: 24px;">
+                    <div class="section-header">
+                        <div>
+                            <h3 class="section-title"><i class="fa-solid fa-diagram-project" style="color: var(--primary); margin-right: 8px;"></i>Quy Trình Cấp Phát Mã PMH Tự Động (Luồng Cốt Lõi)</h3>
+                            <p class="section-subtitle">Hành trình khép kín từ lúc Quản lý gửi form trên LINE đến khi nhận mã coupon chính thức</p>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 10px;">
+                        <!-- Bước 1 -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; position: relative; border-top: 4px solid #3B82F6;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <span style="font-size: 0.78rem; font-weight: 800; color: #3B82F6; background: #EFF6FF; padding: 4px 8px; border-radius: 6px;">BƯỚC 1</span>
+                                <div style="width: 36px; height: 36px; border-radius: 50%; background: #EFF6FF; color: #3B82F6; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
+                                    <i class="fa-solid fa-file-pen"></i>
+                                </div>
+                            </div>
+                            <h4 style="font-size: 1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">Quản Lý Gửi Form</h4>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 10px;">
+                                Quản lý sao chép mẫu từ lệnh <code>cp</code>, điền thông tin và gửi vào nhóm LINE:
+                            </p>
+                            <div style="background: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 6px; padding: 8px 10px; font-family: monospace; font-size: 0.78rem; color: #334155; line-height: 1.4;">
+                                Loại PMH: ML200<br>
+                                Mã Kho Áp Dụng: 910<br>
+                                MĐH Áp Dụng: 2026091901
+                            </div>
+                        </div>
+
+                        <!-- Bước 2 -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; position: relative; border-top: 4px solid #F59E0B;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <span style="font-size: 0.78rem; font-weight: 800; color: #F59E0B; background: #FEF3C7; padding: 4px 8px; border-radius: 6px;">BƯỚC 2</span>
+                                <div style="width: 36px; height: 36px; border-radius: 50%; background: #FEF3C7; color: #F59E0B; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
+                                    <i class="fa-solid fa-filter-circle-dollar"></i>
+                                </div>
+                            </div>
+                            <h4 style="font-size: 1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">Bóc Tách & Lọc Trùng</h4>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+                                Bot dùng Regex bóc tách 3 trường dữ liệu chuẩn xác. Kiểm tra tức thì trên Firebase:
+                            </p>
+                            <ul style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 6px; padding-left: 16px; line-height: 1.45;">
+                                <li><strong>Nếu đơn đang chờ duyệt:</strong> Cảnh báo ngắn gọn không gửi lại.</li>
+                                <li><strong>Nếu đơn đã cấp mã trước đó:</strong> Tạm giữ chờ Admin duyệt thu hồi mã cũ.</li>
+                                <li><strong>Đơn hợp lệ:</strong> Đưa vào hàng đợi duyệt (Bot giữ yên lặng, không spam nhóm).</li>
+                            </ul>
+                        </div>
+
+                        <!-- Bước 3 -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; position: relative; border-top: 4px solid #10B981;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <span style="font-size: 0.78rem; font-weight: 800; color: #10B981; background: #DCFCE7; padding: 4px 8px; border-radius: 6px;">BƯỚC 3</span>
+                                <div style="width: 36px; height: 36px; border-radius: 50%; background: #DCFCE7; color: #10B981; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
+                                    <i class="fa-solid fa-signature"></i>
+                                </div>
+                            </div>
+                            <h4 style="font-size: 1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">Admin Phê Duyệt</h4>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+                                Admin trong danh sách trắng (whitelist) trích dẫn (quote) tin nhắn form hoặc tin bot và gõ:
+                            </p>
+                            <div style="display: flex; gap: 6px; margin: 8px 0;">
+                                <span style="background: #DCFCE7; color: #15803D; font-weight: 800; padding: 3px 10px; border-radius: 4px; font-size: 0.85rem;">DUYỆT</span>
+                                <span style="background: #F1F5F9; color: #475569; font-weight: 700; padding: 3px 10px; border-radius: 4px; font-size: 0.85rem;">ok</span>
+                                <span style="background: #F1F5F9; color: #475569; font-weight: 700; padding: 3px 10px; border-radius: 4px; font-size: 0.85rem;">Ok</span>
+                            </div>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
+                                <em>Hoặc hệ thống tự động phát mã nếu bật tính năng "Tự Động Duyệt (Auto-Approve)".</em>
+                            </p>
+                        </div>
+
+                        <!-- Bước 4 -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; position: relative; border-top: 4px solid #6366F1;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <span style="font-size: 0.78rem; font-weight: 800; color: #6366F1; background: #EEF2FF; padding: 4px 8px; border-radius: 6px;">BƯỚC 4</span>
+                                <div style="width: 36px; height: 36px; border-radius: 50%; background: #EEF2FF; color: #6366F1; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
+                                    <i class="fa-solid fa-ticket"></i>
+                                </div>
+                            </div>
+                            <h4 style="font-size: 1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">Cấp Mã & Phản Hồi</h4>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+                                Bot lấy 1 mã coupon tương ứng loại PMH từ Firebase:
+                            </p>
+                            <ul style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 6px; padding-left: 16px; line-height: 1.45;">
+                                <li>Đổi trạng thái mã thành <code>SENT</code> (Đã phát).</li>
+                                <li>Lưu MĐH, người nhận, thời gian cấp.</li>
+                                <li>Trả lời tin nhắn trên nhóm kèm trích dẫn (quote) trực tiếp người xin mã.</li>
+                                <li>Bắn tín hiệu Live SSE cập nhật số liệu ngay trên Web Admin.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KHỐI 2: BẢNG CÚ PHÁP LỆNH LINE BOT -->
+                <div class="content-section" style="margin-bottom: 24px;">
+                    <div class="section-header">
+                        <div>
+                            <h3 class="section-title"><i class="fa-solid fa-terminal" style="color: #059669; margin-right: 8px;"></i>Danh Mục Cú Pháp Lệnh LINE Bot</h3>
+                            <p class="section-subtitle">Các câu lệnh điều khiển trực tiếp trên nhóm LINE hoặc chat cá nhân với Bot</p>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th width="160">Lệnh (Cú pháp)</th>
+                                    <th width="140">Đối Tượng</th>
+                                    <th>Mục Đích & Hành Vi Của Bot</th>
+                                    <th width="240">Ghi Chú Kỹ Thuật</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="coupon-code-pill" style="font-size: 0.88rem; background: #EFF6FF; color: #2563EB;">cp</span> hoặc <span class="coupon-code-pill" style="font-size: 0.88rem; background: #EFF6FF; color: #2563EB;">cú pháp</span></td>
+                                    <td><span class="badge" style="background: #F1F5F9; color: #334155;">Tất cả thành viên</span></td>
+                                    <td>Bot gửi ngay <strong>mẫu form đăng ký chuẩn</strong> và bảng phân loại mã PMH hiện hành để Quản lý sao chép điền thông tin.</td>
+                                    <td><small class="text-muted">Nội dung lấy trực tiếp từ tab <em>"Quản Lý Cú Pháp"</em> trên Firebase.</small></td>
+                                </tr>
+                                <tr>
+                                    <td><span class="coupon-code-pill" style="font-size: 0.88rem; background: #ECFDF5; color: #059669;">tk</span> hoặc <span class="coupon-code-pill" style="font-size: 0.88rem; background: #ECFDF5; color: #059669;">thống kê</span></td>
+                                    <td><span class="badge" style="background: #F1F5F9; color: #334155;">Tất cả thành viên</span></td>
+                                    <td>Bot kiểm tra kho Firebase và trả về <strong>bảng tổng hợp số lượng mã còn tồn</strong> của từng loại PMH trong kho.</td>
+                                    <td><small class="text-muted">Chỉ đếm các mã có trạng thái <code>status = UNUSED</code>.</small></td>
+                                </tr>
+                                <tr>
+                                    <td><span class="coupon-code-pill" style="font-size: 0.88rem; background: #FEF3C7; color: #D97706;">DUYỆT</span> hoặc <span class="coupon-code-pill" style="font-size: 0.88rem; background: #FEF3C7; color: #D97706;">ok</span></td>
+                                    <td><span class="badge" style="background: #EEF2FF; color: #4F46E5; font-weight: 700;">Chỉ Admin</span></td>
+                                    <td>Phê duyệt đơn hàng được quote (trả lời). Bot tìm mã phù hợp trong kho, chuyển thành <code>SENT</code> và phát mã kèm quote token.</td>
+                                    <td><small class="text-muted">Bắt buộc phải trích dẫn (quote) tin nhắn form hoặc tin nhắn phản hồi của Bot.</small></td>
+                                </tr>
+                                <tr>
+                                    <td><span class="coupon-code-pill" style="font-size: 0.88rem; background: #F3E8FF; color: #7E22CE;">Từ khoá tuỳ chỉnh</span></td>
+                                    <td><span class="badge" style="background: #F1F5F9; color: #334155;">Tất cả thành viên</span></td>
+                                    <td>Bot tự động nhận diện từ khóa được nhắc đến trong đoạn chat và phản hồi nội dung văn bản kèm hình ảnh tương ứng.</td>
+                                    <td><small class="text-muted">Được cấu hình động tại tab <em>"Từ Khoá Tự Động"</em> trên Web Admin.</small></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- KHỐI 3: HƯỚNG DẪN CHI TIẾT 7 PHÂN HỆ TRÊN WEB ADMIN -->
+                <div class="content-section" style="margin-bottom: 24px;">
+                    <div class="section-header">
+                        <div>
+                            <h3 class="section-title"><i class="fa-solid fa-cubes" style="color: #7C3AED; margin-right: 8px;"></i>Nguyên Tắc & Tính Năng Của 7 Phân Hệ Web Admin</h3>
+                            <p class="section-subtitle">Hướng dẫn sử dụng và cơ chế vận hành chuyên sâu của từng phân hệ quản trị</p>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; margin-top: 12px;">
+                        <!-- Phân hệ 1: Tổng Quan -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 22px; box-shadow: var(--shadow-sm);">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                <div style="width: 42px; height: 42px; border-radius: 10px; background: #EEF2FF; color: #4F46E5; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                    <i class="fa-solid fa-chart-pie"></i>
+                                </div>
+                                <div>
+                                    <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">1. Tổng Quan (Dashboard)</h4>
+                                    <span style="font-size: 0.78rem; color: var(--text-muted);">Giám sát và đo lường chỉ số kho</span>
+                                </div>
+                            </div>
+                            <ul style="font-size: 0.84rem; color: var(--text-secondary); line-height: 1.6; padding-left: 18px;">
+                                <li><strong>Thẻ KPI Metric:</strong> Theo dõi tổng số mã đã nhập, số mã đã cấp phát cho quản lý, số mã còn tồn và tỷ lệ % sử dụng kho.</li>
+                                <li><strong>Bảng Tồn Kho Theo Loại:</strong> Chuẩn hiển thị 5 dòng/trang kèm phân trang tiện lợi, thanh % trực quan với màu sắc tự động (Xanh lá: đầy đủ, Cam: trung bình, Đỏ: sắp cạn).</li>
+                                <li><strong>Bảng Hoạt Động Gần Đây:</strong> Lịch sử cấp phát mới nhất, tự động đẩy dòng mới lên đầu bảng theo thời gian thực (Live Realtime).</li>
+                            </ul>
+                        </div>
+
+                        <!-- Phân hệ 2: Kho Mã Coupon -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 22px; box-shadow: var(--shadow-sm);">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                <div style="width: 42px; height: 42px; border-radius: 10px; background: #ECFDF5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                    <i class="fa-solid fa-tags"></i>
+                                </div>
+                                <div>
+                                    <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">2. Kho Mã Coupon</h4>
+                                    <span style="font-size: 0.78rem; color: var(--text-muted);">Quản lý, nhập/xuất và kiểm soát tồn kho</span>
+                                </div>
+                            </div>
+                            <ul style="font-size: 0.84rem; color: var(--text-secondary); line-height: 1.6; padding-left: 18px;">
+                                <li><strong>Phân trang 10 dòng/trang:</strong> Giao diện hiển thị chuẩn 10 dòng, có thanh điều hướng <code>« Đầu</code>, <code>< Trước</code>, ô gõ số trang <code>Trang [X] / Y</code>, <code>Sau ></code>, <code>Cuối »</code>.</li>
+                                <li><strong>Tìm kiếm đa năng:</strong> Tìm tức thì theo mã coupon, loại PMH, mã đơn hàng (MĐH) hoặc tên người nhận.</li>
+                                <li><strong>Nhập Excel & Khử trùng tự động:</strong> Nhập từ file Excel (<code>.xlsx</code>, <code>.csv</code>) hoặc dán trực tiếp. Hệ thống tự loại trừ mã trùng trong kho và mã trùng nội bộ danh sách.</li>
+                                <li><strong>Xuất Excel chuẩn:</strong> Xuất toàn bộ danh sách mã ra file <code>.xlsx</code> hoặc tải file mẫu chuẩn để nhập liệu.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Phân hệ 3: Quản Lý Cú Pháp -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 22px; box-shadow: var(--shadow-sm);">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                <div style="width: 42px; height: 42px; border-radius: 10px; background: #EFF6FF; color: #2563EB; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                    <i class="fa-solid fa-file-code"></i>
+                                </div>
+                                <div>
+                                    <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">3. Quản Lý Cú Pháp Form</h4>
+                                    <span style="font-size: 0.78rem; color: var(--text-muted);">Soạn thảo mẫu form & danh mục PMH</span>
+                                </div>
+                            </div>
+                            <ul style="font-size: 0.84rem; color: var(--text-secondary); line-height: 1.6; padding-left: 18px;">
+                                <li><strong>Soạn thảo trực quan:</strong> Chỉnh sửa nội dung thông báo cú pháp, định mức hạn mức PMH theo từng đợt khuyến mãi (Hạn 30/09, Motorla, Gia Dụng...).</li>
+                                <li><strong>Mô phỏng điện thoại (Live Preview):</strong> Màn hình xem trước giao diện chat LINE sinh động, giúp căn chỉnh bố cục tin nhắn hoàn hảo.</li>
+                                <li><strong>Đồng bộ tức thời:</strong> Khi bấm lưu, dữ liệu được cập nhật ngay lập tức vào Firebase và Bot sẽ dùng nội dung này khi người dùng chat <code>cp</code>.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Phân hệ 4: Khai Báo Admin -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 22px; box-shadow: var(--shadow-sm);">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                <div style="width: 42px; height: 42px; border-radius: 10px; background: #FEF3C7; color: #D97706; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                    <i class="fa-solid fa-user-shield"></i>
+                                </div>
+                                <div>
+                                    <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">4. Khai Báo & Quản Lý Admin</h4>
+                                    <span style="font-size: 0.78rem; color: var(--text-muted);">Phân quyền phê duyệt phát mã trên LINE</span>
+                                </div>
+                            </div>
+                            <ul style="font-size: 0.84rem; color: var(--text-secondary); line-height: 1.6; padding-left: 18px;">
+                                <li><strong>Danh sách trắng Admin:</strong> Quản lý các LINE User ID (định dạng <code>U...</code>) có quyền phê duyệt phát mã. Chỉ người trong danh sách này gõ <code>DUYỆT</code> thì Bot mới cấp mã.</li>
+                                <li><strong>Tự động nhận diện:</strong> Hệ thống tự động gợi ý và hiển thị tên hiển thị LINE của Admin.</li>
+                                <li><strong>Chế độ Tự Động Duyệt (Auto-Approve):</strong> Cho phép bật/tắt tính năng tự động phát mã ngay khi nhận form hợp lệ mà không cần Admin can thiệp duyệt thủ công.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Phân hệ 5: Hẹn Giờ Thông Báo -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 22px; box-shadow: var(--shadow-sm);">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                <div style="width: 42px; height: 42px; border-radius: 10px; background: #FDF2F8; color: #DB2777; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                    <i class="fa-solid fa-clock"></i>
+                                </div>
+                                <div>
+                                    <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">5. Hẹn Giờ Thông Báo (Schedules)</h4>
+                                    <span style="font-size: 0.78rem; color: var(--text-muted);">Gửi báo cáo tồn kho định kỳ tự động</span>
+                                </div>
+                            </div>
+                            <ul style="font-size: 0.84rem; color: var(--text-secondary); line-height: 1.6; padding-left: 18px;">
+                                <li><strong>Tự động nhận diện nhóm:</strong> Bot tự động ghi nhớ và cập nhật danh sách các nhóm LINE mà nó đang là thành viên (<code>groupId</code>).</li>
+                                <li><strong>Lịch trình linh hoạt:</strong> Cấu hình gửi báo cáo tồn kho định kỳ vào các khung giờ cố định (mặc định 6h00 sáng và 15h00 chiều hàng ngày) hoặc thêm các lịch tuỳ chỉnh.</li>
+                                <li><strong>Node-Cron độc lập:</strong> Tiến trình chạy ngầm trực tiếp trên máy chủ Node.js, không phụ thuộc vào Trigger giới hạn của Google Apps Script.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Phân hệ 6: Từ Khoá Tự Động -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 22px; box-shadow: var(--shadow-sm);">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                <div style="width: 42px; height: 42px; border-radius: 10px; background: #F5F3FF; color: #7C3AED; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                    <i class="fa-solid fa-spell-check"></i>
+                                </div>
+                                <div>
+                                    <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">6. Thư Viện Từ Khoá Tự Động</h4>
+                                    <span style="font-size: 0.78rem; color: var(--text-muted);">Trợ lý ảo thông minh trả lời tự động</span>
+                                </div>
+                            </div>
+                            <ul style="font-size: 0.84rem; color: var(--text-secondary); line-height: 1.6; padding-left: 18px;">
+                                <li><strong>Kích hoạt theo từ khoá:</strong> Thiết lập các từ khoá kích hoạt (hỗ trợ nhiều từ khóa phân tách bằng dấu phẩy).</li>
+                                <li><strong>Đa phương tiện (Text + Images):</strong> Soạn thảo câu trả lời kèm danh sách link ảnh (poster, quy định, infographic). Bot sẽ gửi tin nhắn kèm các ảnh trực tiếp vào nhóm.</li>
+                                <li><strong>Bật/tắt linh hoạt:</strong> Dễ dàng kích hoạt hoặc tạm dừng từng từ khoá mà không cần xoá cấu hình.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Phân hệ 7: Nhật Ký Hoạt Động -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 22px; box-shadow: var(--shadow-sm); grid-column: 1 / -1;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                <div style="width: 42px; height: 42px; border-radius: 10px; background: #F1F5F9; color: #475569; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                                </div>
+                                <div>
+                                    <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">7. Nhật Ký Thao Tác Quản Trị (Audit Logs)</h4>
+                                    <span style="font-size: 0.78rem; color: var(--text-muted);">Minh bạch hóa và ghi vết 100% lịch sử vận hành</span>
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+                                <div style="font-size: 0.84rem; color: var(--text-secondary); line-height: 1.6;">
+                                    <p><strong>Ghi nhận thời gian thực:</strong> Mọi hành động quan trọng gồm: nạp mã hàng loạt, xoá mã, đổi trạng thái, cập nhật cú pháp, thêm/xoá admin, chỉnh sửa lịch hẹn giờ đều được tự động lưu vào Firebase Realtime Database.</p>
+                                </div>
+                                <div style="font-size: 0.84rem; color: var(--text-secondary); line-height: 1.6;">
+                                    <p><strong>Thông tin chi tiết:</strong> Ghi rõ thời gian thực hiện, tài khoản Admin thực hiện (3717, 12233...), loại hành động và chi tiết thay đổi để dễ dàng đối soát khi có thắc mắc.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KHỐI 4: SO SÁNH CÔNG NGHỆ VỚI GOOGLE APPS SCRIPT CŨ -->
+                <div class="content-section" style="margin-bottom: 24px;">
+                    <div class="section-header">
+                        <div>
+                            <h3 class="section-title"><i class="fa-solid fa-scale-balanced" style="color: #2563EB; margin-right: 8px;"></i>So Sánh Đột Phá So Với Nền Tảng Cũ (Google Apps Script)</h3>
+                            <p class="section-subtitle">Tại sao hệ thống Node.js Express + Firebase Realtime DB vượt trội hơn 20 lần</p>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th width="200">Tiêu Chí Đánh Giá</th>
+                                    <th width="300" style="color: #DC2626;">Google Apps Script & Sheet (Cũ)</th>
+                                    <th style="color: #16A34A;">PMH Cloud Firebase + Node.js (Hiện Tại)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Tốc độ xử lý (Latency)</strong></td>
+                                    <td style="color: #B91C1C;"><i class="fa-solid fa-xmark"></i> Chậm (2 - 5 giây / request) do phải mở Spreadsheet</td>
+                                    <td style="color: #15803D; font-weight: 600;"><i class="fa-solid fa-check"></i> Siêu tốc (~50ms) đọc/ghi tức thời từ Firebase Singapore</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Độ ổn định & Quota</strong></td>
+                                    <td style="color: #B91C1C;"><i class="fa-solid fa-xmark"></i> Thường xuyên dính hạn mức Quota, giới hạn trigger 90 phút/ngày</td>
+                                    <td style="color: #15803D; font-weight: 600;"><i class="fa-solid fa-check"></i> Không giới hạn, Web Service Node.js hoạt động bền bỉ 24/7</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Đồng bộ dữ liệu</strong></td>
+                                    <td style="color: #B91C1C;"><i class="fa-solid fa-xmark"></i> Phải bấm F5 tải lại trang để thấy số liệu mới</td>
+                                    <td style="color: #15803D; font-weight: 600;"><i class="fa-solid fa-check"></i> Live Realtime SSE tự động cập nhật số liệu không cần tải lại trang</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Quản lý kho mã</strong></td>
+                                    <td style="color: #B91C1C;"><i class="fa-solid fa-xmark"></i> Dễ bị ghi đè dữ liệu (Race condition) khi nhiều đơn gửi cùng lúc</td>
+                                    <td style="color: #15803D; font-weight: 600;"><i class="fa-solid fa-check"></i> Transaction an toàn, chống trùng lặp MĐH và tự thu hồi mã cũ</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Bảo mật & Quản trị</strong></td>
+                                    <td style="color: #B91C1C;"><i class="fa-solid fa-xmark"></i> Quyền truy cập Sheet khó phân tầng chi tiết</td>
+                                    <td style="color: #15803D; font-weight: 600;"><i class="fa-solid fa-check"></i> Web Admin đăng nhập bảo mật, phân quyền Admin LINE, Audit Log đầy đủ</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Footer Callout Note -->
+                <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: var(--radius-md); padding: 18px 24px; display: flex; align-items: center; gap: 16px;">
+                    <div style="font-size: 1.8rem; color: #16A34A;">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </div>
+                    <div>
+                        <h4 style="font-size: 0.95rem; font-weight: 700; color: #166534; margin-bottom: 4px;">Hệ Thống Đã Được Tối Ưu Hóa Tuyệt Đối</h4>
+                        <p style="font-size: 0.84rem; color: #15803D; line-height: 1.5; margin: 0;">
+                            Mọi thắc mắc kỹ thuật hoặc nhu cầu mở rộng tính năng, vui lòng liên hệ Bộ phận Phát triển PMH ICT. Toàn bộ mã nguồn đã được đóng gói chuẩn mực, dễ dàng sao lưu hoặc triển khai thêm nhiều bot chi nhánh khác khi cần thiết.
+                        </p>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -1312,6 +1699,6 @@ NDYXIKJL0L	ML200..." rows="8" oninput="previewBulkImport()"></textarea>
     <div id="toast-container" class="toast-container"></div>
 
     <!-- Application Logic Scripts -->
-    <script src="app.js?v=1.4.0"></script>
+    <script src="app.js?v=1.4.1"></script>
 </body>
 </html>
