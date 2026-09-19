@@ -711,6 +711,36 @@ function deleteSingleCouponPrompt(code) {
     }
 }
 
+function clearAllCouponsPrompt() {
+    const totalCount = appState.coupons.length;
+    if (totalCount === 0) {
+        showToast('Kho hiện tại đang trống, không có mã nào để xóa.', 'info');
+        return;
+    }
+
+    const unusedCount = appState.coupons.filter(c => c.status === 'UNUSED').length;
+    const sentCount = totalCount - unusedCount;
+
+    const confirmMsg =
+        `⚠️ CẢNH BÁO NGUY HIỂM: XOÁ TẤT CẢ MÃ TRONG KHO ⚠️\n\n` +
+        `Bạn có chắc chắn muốn XOÁ VĨNH VIỄN TOÀN BỘ ${totalCount.toLocaleString('vi-VN')} MÃ COUPON đang có trong kho?\n\n` +
+        `• Mã chưa dùng (Tồn kho): ${unusedCount.toLocaleString('vi-VN')} mã\n` +
+        `• Mã đã phát (Đã duyệt): ${sentCount.toLocaleString('vi-VN')} mã\n\n` +
+        `🚨 LƯU Ý: Toàn bộ dữ liệu mã trong kho sẽ bị xoá sạch về 0 và KHÔNG THỂ khôi phục lại!\n\n` +
+        `Bấm "OK" để tiếp tục xác nhận xoá toàn bộ.`;
+
+    if (!confirm(confirmMsg)) return;
+
+    if (!confirm(`🔴 XÁC NHẬN LẦN CUỐI:\n\nBạn thực sự muốn xoá sạch toàn bộ ${totalCount.toLocaleString('vi-VN')} mã coupon trong kho về 0?`)) return;
+
+    appState.coupons = [];
+    saveAndSyncCoupons();
+    renderCouponsTable();
+    renderDashboard();
+    updateTypeDropdowns();
+    showToast(`Đã xoá sạch toàn bộ ${totalCount.toLocaleString('vi-VN')} mã trong kho!`, 'success');
+}
+
 function clearSentCouponsPrompt() {
     const sentCount = appState.coupons.filter(c => c.status === 'SENT').length;
     if (sentCount === 0) {
@@ -1289,13 +1319,19 @@ function syncDataFromFirebase(isUserClick = false) {
     .then(([fbCoupons, fbSyntax, fbAdmins, fbSettings, fbSchedules, fbGroups, fbKeywords]) => {
         showSyncing(false);
 
-        if (fbCoupons && Array.isArray(fbCoupons)) {
-            appState.coupons = fbCoupons;
-            saveCouponsToLocal();
-            renderCouponsTable();
-            renderDashboard();
-            updateTypeDropdowns();
+        if (fbCoupons) {
+            if (Array.isArray(fbCoupons)) {
+                appState.coupons = fbCoupons;
+            } else if (typeof fbCoupons === 'object') {
+                appState.coupons = Object.values(fbCoupons).filter(Boolean);
+            }
+        } else {
+            appState.coupons = [];
         }
+        saveCouponsToLocal();
+        renderCouponsTable();
+        renderDashboard();
+        updateTypeDropdowns();
 
         if (fbSyntax && fbSyntax.text) {
             appState.syntax = fbSyntax.text;

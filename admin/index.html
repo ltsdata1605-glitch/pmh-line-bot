@@ -336,7 +336,11 @@
                         Hiển thị <strong id="filter-count-display">0</strong> / <span id="total-count-display">0</span> mã
                     </div>
                     <div class="table-batch-actions">
-                        <button class="btn btn-danger btn-sm" id="btn-clear-sent" onclick="clearSentCouponsPrompt()">
+                        <button class="btn btn-danger btn-sm" id="btn-clear-all" onclick="clearAllCouponsPrompt()" title="Xoá vĩnh viễn tất cả các mã coupon hiện có trong kho">
+                            <i class="fa-solid fa-trash"></i>
+                            <span>Xóa Tất Cả Mã Trong Kho</span>
+                        </button>
+                        <button class="btn btn-danger btn-sm" id="btn-clear-sent" onclick="clearSentCouponsPrompt()" title="Dọn dẹp các mã đã duyệt phát">
                             <i class="fa-solid fa-trash-can"></i>
                             <span>Xóa Các Mã Đã Phát</span>
                         </button>
