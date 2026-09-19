@@ -28,8 +28,10 @@ const lineClient = {
             console.log('[LINE] Phản hồi tin nhắn thành công qua @line/bot-sdk!');
             return true;
         } catch (error) {
-            const errData = error.response ? JSON.stringify(error.response.data) : (error.message || error);
+            const Firebase = require('./firebase');
+            const errData = error?.body || (error.response ? JSON.stringify(error.response.data) : (error.message || error));
             console.error('[LINE] Lỗi replyText:', errData);
+            Firebase.logSystem('REPLY_ERROR', { error: errData, token: CONFIG.CHANNEL_ACCESS_TOKEN.slice(0, 10) }).catch(() => {});
             return false;
         }
     },

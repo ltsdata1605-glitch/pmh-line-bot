@@ -22,8 +22,9 @@ app.get('/api/health', async (req, res) => {
     const syntax = await Firebase.getSyntax();
     res.json({
         status: 'OK',
-        version: '1.0.5',
+        version: '1.0.6',
         botName: 'DM_Tây Nam Bộ',
+        tokenPrefix: CONFIG.CHANNEL_ACCESS_TOKEN.slice(0, 10),
         service: 'PMH LINE BOT & Web Admin',
         firebaseConnected: !!syntax,
         timestamp: new Date().toISOString()
@@ -42,6 +43,14 @@ app.post('/webhook', async (req, res) => {
         return res.status(200).send('No events');
     }
 
+    Firebase.logSystem('WEBHOOK_EVENTS', events.map(e => ({
+        type: e.type,
+        text: e.message?.text,
+        sourceType: e.source?.type,
+        groupId: e.source?.groupId,
+        userId: e.source?.userId
+    }))).catch(() => {});
+
     // Xử lý tất cả sự kiện song song trước khi trả về 200 OK (chuẩn architecture của Botline_nhacviec)
     await Promise.all(
         events.map(async (event) => {
@@ -53,6 +62,7 @@ app.post('/webhook', async (req, res) => {
                 await handleLineEvent(event);
             } catch (err) {
                 console.error('[Server] Lỗi khi xử lý sự kiện LINE:', err);
+                Firebase.logSystem('EVENT_HANDLER_ERROR', err?.message || String(err)).catch(() => {});
             }
         })
     );
