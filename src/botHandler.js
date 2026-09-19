@@ -338,7 +338,7 @@ async function handleLineEvent(event) {
         const flexCard = lineClient.createMainMenuFlexCard(admin);
         const quickReply = lineClient.getQuickReplyMenu(admin);
         const altText = '⚡ Menu Tiện Ích 1 Chạm PMH';
-        const ok = await lineClient.replyFlex(replyToken, altText, flexCard, quoteToken, quickReply);
+        const ok = await lineClient.replyFlex(replyToken, altText, flexCard, quickReply, sourceId);
         if (!ok) {
             const fallbackText =
                 `⚡ MENU TIỆN ÍCH 1 CHẠM PMH:\n` +
@@ -351,7 +351,7 @@ async function handleLineEvent(event) {
                 `• "web": Đường dẫn Web Quản Trị (Admin)\n` +
                 `━━━━━━━━━━━━━━━━━━━━━\n` +
                 `💡 Bấm các phím bên dưới để thao tác nhanh!`;
-            await lineClient.replyText(replyToken, fallbackText, quoteToken, quickReply);
+            await lineClient.replyText(replyToken, fallbackText, quoteToken, quickReply, sourceId);
         }
         return;
     }
@@ -437,9 +437,9 @@ async function handleLineEvent(event) {
             `• Cấp lúc: ${orderData.issuedTime} (Duyệt: ${orderData.approvedBy})\n` +
             (orderData.isReplaced && orderData.oldCode ? `⚠️ Đã thu hồi mã cũ "${orderData.oldCode}" lúc ${orderData.oldTime} để cấp mã mới!` : '');
 
-        const ok = await lineClient.replyFlex(replyToken, fallbackText, flexCard, quoteToken, quickReply);
+        const ok = await lineClient.replyFlex(replyToken, fallbackText, flexCard, quickReply, sourceId);
         if (!ok) {
-            await lineClient.replyText(replyToken, fallbackText, quoteToken, quickReply);
+            await lineClient.replyText(replyToken, fallbackText, quoteToken, quickReply, sourceId);
         }
         return;
     }
@@ -665,9 +665,9 @@ async function handleLineEvent(event) {
         const admin = await isAdmin(userId);
         const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu(admin) : null;
         if (!syntax) {
-            await lineClient.replyText(replyToken, '❌ Chưa có cú pháp nào trên hệ thống Web Quản Trị.', quoteToken, quickReply);
+            await lineClient.replyText(replyToken, '❌ Chưa có cú pháp nào trên hệ thống Web Quản Trị.', quoteToken, quickReply, sourceId);
         } else {
-            await lineClient.replyText(replyToken, syntax, quoteToken, quickReply);
+            await lineClient.replyText(replyToken, syntax, quoteToken, quickReply, sourceId);
         }
         return;
     }
@@ -690,7 +690,7 @@ async function handleLineEvent(event) {
         const statsMessage = await couponService.getStatisticsMessage();
         const admin = await isAdmin(userId);
         const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu(admin) : null;
-        await lineClient.replyText(replyToken, statsMessage, quoteToken, quickReply);
+        await lineClient.replyText(replyToken, statsMessage, quoteToken, quickReply, sourceId);
         return;
     }
 
@@ -700,19 +700,16 @@ async function handleLineEvent(event) {
         lowerText === 'lichsuall' ||
         lowerText === 'lich su all' ||
         lowerText === '.lsall' ||
-        lowerText === '/lsall' ||
-        lowerText.includes('tất cả lịch sử');
+        lowerText === '/lsall';
 
-    const isLsToday = !isLsAll && (
-        lowerText === 'ls' ||
-        lowerText.startsWith('ls ') ||
+    const isLsToday = lowerText === 'ls' ||
         lowerText === 'lichsu' ||
         lowerText === 'lich su' ||
-        lowerText === 'lịch sử' ||
         lowerText === '.ls' ||
         lowerText === '/ls' ||
-        lowerText.includes('lịch sử hôm nay')
-    );
+        lowerText === 'lịch sử' ||
+        lowerText === 'lich su nhan ma' ||
+        lowerText === 'lịch sử nhận mã';
 
     if (isLsAll || isLsToday) {
         // Yêu cầu: Chỉ áp dụng khi chat 1-1, không hỗ trợ trong nhóm chat
@@ -725,7 +722,7 @@ async function handleLineEvent(event) {
                 '💡 Quản lý vui lòng chat riêng 1-1 với BOT:\n' +
                 '• Gõ "ls": Xem tất cả mã nhận trong ngày hôm nay (00h-23h59)\n' +
                 '• Gõ "lsall": Xem toàn bộ lịch sử phân theo từng ngày';
-            await lineClient.replyText(replyToken, refuseMsg, quoteToken);
+            await lineClient.replyText(replyToken, refuseMsg, quoteToken, null, sourceId);
             return;
         }
 
@@ -764,7 +761,7 @@ async function handleLineEvent(event) {
                 ].join(NL);
             }
 
-            await lineClient.replyText(replyToken, msg, quoteToken, quickReply);
+            await lineClient.replyText(replyToken, msg, quoteToken, quickReply, sourceId);
             return;
         }
 
@@ -797,7 +794,7 @@ async function handleLineEvent(event) {
             ].join(NL);
         }
 
-        await lineClient.replyText(replyToken, historyMsg, quoteToken, quickReply);
+        await lineClient.replyText(replyToken, historyMsg, quoteToken, quickReply, sourceId);
         return;
     }
 
@@ -823,10 +820,10 @@ async function handleLineEvent(event) {
                 '• "ls": Xem lịch sử nhận mã hôm nay (chỉ chat 1-1).',
                 '• "lsall": Xem toàn bộ lịch sử phân theo ngày (chỉ chat 1-1).'
             ].join(NL);
-            await lineClient.replyText(replyToken, guide, quoteToken, quickReply);
+            await lineClient.replyText(replyToken, guide, quoteToken, quickReply, sourceId);
         } else {
             const syntax = await Firebase.getSyntax();
-            await lineClient.replyText(replyToken, syntax || '💡 Gõ "cp" lấy mẫu xin PMH, "ls" xem lịch sử hôm nay (chat 1-1), "lsall" xem toàn bộ lịch sử, "/tukhoa" xem danh sách từ khoá.', quoteToken, quickReply);
+            await lineClient.replyText(replyToken, syntax || '💡 Gõ "cp" lấy mẫu xin PMH, "ls" xem lịch sử hôm nay (chat 1-1), "lsall" xem toàn bộ lịch sử, "/tukhoa" xem danh sách từ khoá.', quoteToken, quickReply, sourceId);
         }
         return;
     }
@@ -869,7 +866,7 @@ async function handleLineEvent(event) {
         }
 
         if (messages.length > 0) {
-            await lineClient.replyMessages(replyToken, messages);
+            await lineClient.replyMessages(replyToken, messages, sourceId);
             Firebase.logSystem('KEYWORD_TRIGGERED', {
                 keyword: keywordMatch.keyword,
                 userId: userId,
@@ -936,7 +933,7 @@ async function handleCouponRequest(payload) {
     const parsed = parseCouponForm(payload.text);
 
     if (!parsed.ok) {
-        await lineClient.replyText(payload.replyToken, parsed.message, payload.quoteToken);
+        await lineClient.replyText(payload.replyToken, parsed.message, payload.quoteToken, null, payload.sourceId);
         return;
     }
 
@@ -957,7 +954,7 @@ async function handleCouponRequest(payload) {
             `━━━━━━━━━━━━━━━━━━━━━\n` +
             `MĐH "${data.mdh}" (${data.loaiPMH}) hiện đã được tiếp nhận và đang nằm trong danh sách chờ Admin duyệt.\n` +
             `👉 Quản lý vui lòng không gửi lại để tránh trùng lặp! Admin sẽ duyệt sớm nhất.`;
-        await lineClient.replyText(payload.replyToken, pendingMsg, payload.quoteToken);
+        await lineClient.replyText(payload.replyToken, pendingMsg, payload.quoteToken, null, payload.sourceId);
         return;
     }
 
@@ -1005,7 +1002,9 @@ async function handleCouponRequest(payload) {
             await lineClient.replyText(
                 payload.replyToken,
                 `❌ Kho đã hết mã PMH loại "${data.loaiPMH}" để cấp lại! Mã cũ "${oldCode}" của MĐH ${data.mdh} vẫn được giữ nguyên.`,
-                payload.quoteToken
+                payload.quoteToken,
+                null,
+                payload.sourceId
             );
             return;
         }
@@ -1023,7 +1022,7 @@ async function handleCouponRequest(payload) {
             chatId: payload.sourceId
         });
 
-        await lineClient.replyText(payload.replyToken, `❌ Hết mã PMH loại "${data.loaiPMH}".`, payload.quoteToken);
+        await lineClient.replyText(payload.replyToken, `❌ Hết mã PMH loại "${data.loaiPMH}".`, payload.quoteToken, null, payload.sourceId);
         return;
     }
 
@@ -1120,10 +1119,10 @@ async function handleCouponRequest(payload) {
             oldTime
         });
 
-        // Gửi Flex Message Card kèm fallback Text trích dẫn
-        const ok = await lineClient.replyFlex(payload.replyToken, sendMsg, flexCard, payload.quoteToken);
+        // Gửi Flex Message Card kèm fallback Text trích dẫn và push fallback
+        const ok = await lineClient.replyFlex(payload.replyToken, sendMsg, flexCard, null, payload.sourceId);
         if (!ok) {
-            await lineClient.replyText(payload.replyToken, sendMsg, payload.quoteToken);
+            await lineClient.replyText(payload.replyToken, sendMsg, payload.quoteToken, null, payload.sourceId);
         }
 
         // Kích hoạt cảnh báo tự động tới các nhóm & admin (nếu chạm mốc < 30, < 20, < 10, = 0)
@@ -1172,7 +1171,7 @@ async function handleCouponRequest(payload) {
         } else {
             pendingMsg = `⏳ Đã nhận yêu cầu PMH ${data.loaiPMH} (MĐH: ${data.mdh || '-'}). Đang chờ Admin duyệt...`;
         }
-        await lineClient.replyText(payload.replyToken, pendingMsg, payload.quoteToken);
+        await lineClient.replyText(payload.replyToken, pendingMsg, payload.quoteToken, null, payload.sourceId);
     }
 }
 
@@ -1184,7 +1183,7 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
     const pendingList = requests.filter(r => r.status === CONFIG.REQUEST_STATUS_PENDING || r.status === 'Chờ duyệt đơn');
 
     if (pendingList.length === 0) {
-        await lineClient.replyText(replyToken, 'Hiện tại không có yêu cầu nào đang nằm trong danh sách chờ duyệt.', quoteToken);
+        await lineClient.replyText(replyToken, 'Hiện tại không có yêu cầu nào đang nằm trong danh sách chờ duyệt.', quoteToken, null, sourceId);
         return;
     }
 
@@ -1283,7 +1282,9 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
                 await lineClient.replyText(
                     replyToken,
                     `❌ Hết mã PMH loại "${targetReq.loaiPMH}" trong kho để cấp cho MĐH ${targetReq.mdh}.`,
-                    quoteToken
+                    quoteToken,
+                    null,
+                    sourceId
                 );
                 return;
             }
@@ -1364,9 +1365,9 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
             oldTime: oldTime
         });
 
-        const ok = await lineClient.replyFlex(replyToken, replyMsg, flexCard, quoteToken);
+        const ok = await lineClient.replyFlex(replyToken, replyMsg, flexCard, null, sourceId);
         if (!ok) {
-            await lineClient.replyText(replyToken, replyMsg, quoteToken);
+            await lineClient.replyText(replyToken, replyMsg, quoteToken, null, sourceId);
         }
 
         // Kích hoạt cảnh báo tự động tới các nhóm & admin
@@ -1487,7 +1488,7 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
         if (approvedCount > 1) {
             fullMsg += `${NL}━━━━━━━━━━━━━${NL}💡 Hãy chuyển tiếp tin nhắn này cho BOT để lọc nhanh PMH của bạn!`;
         }
-        await lineClient.replyText(replyToken, fullMsg, quoteToken);
+        await lineClient.replyText(replyToken, fullMsg, quoteToken, null, sourceId);
 
         // Kích hoạt cảnh báo cho các loại mã vừa được duyệt phát
         for (const t of approvedTypes) {
@@ -1496,7 +1497,7 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
             });
         }
     } else {
-        await lineClient.replyText(replyToken, '❌ Không thể duyệt vì các loại PMH trong danh sách chờ đã hết mã.', quoteToken);
+        await lineClient.replyText(replyToken, '❌ Không thể duyệt vì các loại PMH trong danh sách chờ đã hết mã.', quoteToken, null, sourceId);
     }
 }
 

@@ -76,9 +76,9 @@ const lineClient = {
     },
 
     /**
-     * Trả lời tin nhắn người dùng bằng official @line/bot-sdk (hỗ trợ trích dẫn quoteToken và quickReply)
+     * Trả lời tin nhắn người dùng bằng official @line/bot-sdk (hỗ trợ trích dẫn quoteToken, quickReply và push fallback)
      */
-    async replyText(replyToken, text, quoteToken = null, quickReply = null) {
+    async replyText(replyToken, text, quoteToken = null, quickReply = null, sourceId = null) {
         if (!replyToken || !text) return false;
 
         const cleanText = String(text).trim();
@@ -121,29 +121,45 @@ const lineClient = {
             console.error('[LINE] Lỗi replyText:', errData);
             Firebase.logSystem('REPLY_ERROR', { error: errData, token: CONFIG.CHANNEL_ACCESS_TOKEN.slice(0, 10) }).catch(() => {});
 
-            // CƠ CHẾ FALLBACK TỰ ĐỘNG: Gửi tin nhắn text thuần không kèm quote/quickReply nếu gặp lỗi API
+            // FALLBACK 1: Gửi tin nhắn text thuần không kèm quote/quickReply qua replyToken
             if (messageObj.quoteToken || messageObj.quickReply) {
                 try {
-                    console.log('[LINE] Thử gửi lại tin nhắn thuần (fallback không quote/quickReply)...');
+                    console.log('[LINE] Thử gửi lại tin nhắn thuần (fallback 1 không quote/quickReply)...');
                     await client.replyMessage({
                         replyToken: replyToken,
                         messages: [{ type: 'text', text: cleanText }]
                     });
-                    console.log('[LINE] Fallback tin nhắn thuần thành công!');
+                    console.log('[LINE] Fallback tin nhắn thuần qua replyToken thành công!');
                     return true;
                 } catch (retryError) {
-                    const retryErrData = retryError?.body || (retryError.response ? JSON.stringify(retryError.response.data) : retryError.message);
-                    console.error('[LINE] Fallback tin nhắn thuần cũng thất bại:', retryErrData);
+                    console.warn('[LINE] Fallback 1 thất bại:', retryError?.message || retryError);
                 }
             }
+
+            // FALLBACK 2: PushMessage trực tiếp tới sourceId nếu replyToken bị invalid/expired
+            if (sourceId) {
+                try {
+                    console.log(`[LINE] Fallback 2: Đang pushText trực tiếp tới ${sourceId}...`);
+                    await client.pushMessage({
+                        to: sourceId,
+                        messages: [{ type: 'text', text: cleanText }]
+                    });
+                    console.log('[LINE] Fallback pushText thành công 100%!');
+                    return true;
+                } catch (pushErr) {
+                    console.error('[LINE] Fallback pushText cũng thất bại:', pushErr?.message || pushErr);
+                }
+            }
+
             return false;
         }
     },
 
     /**
-     * Trả lời bằng LINE Flex Message Card đồ hoạ đẹp mắt (kèm fallback text tự động)
+     * Trả lời bằng LINE Flex Message Card đồ hoạ đẹp mắt (kèm fallback text tự động & push fallback)
+     * CHÚ Ý: LINE Messaging API nghiêm cấm quoteToken trên tin nhắn 'flex'!
      */
-    async replyFlex(replyToken, altText, flexContents, quoteToken = null, quickReply = null) {
+    async replyFlex(replyToken, altText, flexContents, quickReply = null, sourceId = null) {
         if (!replyToken || !flexContents) return false;
 
         const messageObj = {
@@ -152,9 +168,7 @@ const lineClient = {
             contents: flexContents
         };
 
-        if (quoteToken && typeof quoteToken === 'string' && quoteToken.trim()) {
-            messageObj.quoteToken = quoteToken.trim();
-        }
+        // Tuyệt đối không thêm quoteToken vào messageObj vì LINE chỉ cho phép quoteToken trên type 'text'
 
         if (quickReply && Array.isArray(quickReply.items) && quickReply.items.length > 0) {
             const safeItems = quickReply.items.map(item => {
@@ -180,11 +194,41 @@ const lineClient = {
             console.log('[LINE] Phản hồi Flex Message Card thành công!');
             return true;
         } catch (error) {
+            const Firebase = require('./firebase');
             const errData = error?.body || (error.response ? JSON.stringify(error.response.data) : (error.message || error));
-            console.error('[LINE] Lỗi replyFlex, tự động fallback về tin nhắn Text:', errData);
+            console.error('[LINE] Lỗi replyFlex:', errData);
+            Firebase.logSystem('REPLY_FLEX_ERROR', { error: errData, token: CONFIG.CHANNEL_ACCESS_TOKEN.slice(0, 10) }).catch(() => {});
+
+            // FALLBACK 1: Gửi text qua replyToken
             if (altText) {
-                return await this.replyText(replyToken, altText, quoteToken, quickReply);
+                try {
+                    console.log('[LINE] Fallback 1: Gửi text thay thế qua replyToken...');
+                    await client.replyMessage({
+                        replyToken: replyToken,
+                        messages: [{ type: 'text', text: altText }]
+                    });
+                    console.log('[LINE] Fallback replyText thành công!');
+                    return true;
+                } catch (retryErr) {
+                    console.warn('[LINE] Fallback replyText thất bại:', retryErr?.message || retryErr);
+                }
             }
+
+            // FALLBACK 2: PushMessage trực tiếp tới phòng chat nếu replyToken không hợp lệ
+            if (sourceId && altText) {
+                try {
+                    console.log(`[LINE] Fallback 2: Đang push trực tiếp tới ${sourceId}...`);
+                    await client.pushMessage({
+                        to: sourceId,
+                        messages: [{ type: 'text', text: altText }]
+                    });
+                    console.log('[LINE] Fallback pushMessage thành công 100%!');
+                    return true;
+                } catch (pushErr) {
+                    console.error('[LINE] Fallback pushMessage thất bại:', pushErr?.message || pushErr);
+                }
+            }
+
             return false;
         }
     },
@@ -749,7 +793,7 @@ const lineClient = {
     /**
      * Trả lời nhiều tin nhắn cùng lúc (Text + Danh sách Ảnh) qua @line/bot-sdk
      */
-    async replyMessages(replyToken, messages) {
+    async replyMessages(replyToken, messages, sourceId = null) {
         if (!replyToken || !messages || !Array.isArray(messages) || messages.length === 0) {
             return false;
         }
@@ -766,6 +810,21 @@ const lineClient = {
             const errData = error?.body || (error.response ? JSON.stringify(error.response.data) : (error.message || error));
             console.error('[LINE] Lỗi replyMessages:', errData);
             Firebase.logSystem('REPLY_MESSAGES_ERROR', { error: errData }).catch(() => {});
+
+            if (sourceId) {
+                try {
+                    console.log(`[LINE] Fallback: Đang pushMessages trực tiếp tới ${sourceId}...`);
+                    await client.pushMessage({
+                        to: sourceId,
+                        messages: messages.slice(0, 5)
+                    });
+                    console.log('[LINE] Fallback pushMessages thành công!');
+                    return true;
+                } catch (pushErr) {
+                    console.error('[LINE] Fallback pushMessages thất bại:', pushErr?.message || pushErr);
+                }
+            }
+
             return false;
         }
     },
