@@ -92,7 +92,7 @@ async function getUserDisplayNameCandidates(userId) {
         if (lineName && lineName !== 'Quản lý') {
             candidates.add(lineName.trim());
         }
-    } catch (e) {}
+    } catch (e) { }
 
     // 2. Lịch sử Requests trong Firebase
     try {
@@ -105,7 +105,7 @@ async function getUserDisplayNameCandidates(userId) {
                 }
             });
         }
-    } catch (e) {}
+    } catch (e) { }
 
     // 3. Lịch sử Coupons trong Firebase
     try {
@@ -117,7 +117,7 @@ async function getUserDisplayNameCandidates(userId) {
                 }
             });
         }
-    } catch (e) {}
+    } catch (e) { }
 
     // 4. Danh sách Admin trong Firebase
     try {
@@ -129,7 +129,7 @@ async function getUserDisplayNameCandidates(userId) {
                 }
             });
         }
-    } catch (e) {}
+    } catch (e) { }
 
     return Array.from(candidates);
 }
@@ -244,7 +244,7 @@ async function handleLineEvent(event) {
     if (event.type === 'join') {
         const groupId = event.source?.groupId;
         if (groupId) {
-            trackGroupInfo(groupId).catch(() => {});
+            trackGroupInfo(groupId).catch(() => { });
         }
 
         const welcome = [
@@ -286,12 +286,12 @@ async function handleLineEvent(event) {
 
     // Tự động nhận diện và cập nhật thông tin nhóm
     if (event.source?.groupId) {
-        trackGroupInfo(event.source.groupId).catch(() => {});
+        trackGroupInfo(event.source.groupId).catch(() => { });
     }
 
     // Đánh dấu đã xem (mark as read)
     if (event.message.markAsReadToken && sourceId) {
-        lineClient.markAsRead(sourceId, event.message.markAsReadToken).catch(() => {});
+        lineClient.markAsRead(sourceId, event.message.markAsReadToken).catch(() => { });
     }
 
     // Chống trùng tin nhắn
@@ -327,7 +327,7 @@ async function handleLineEvent(event) {
                         quoteToken
                     );
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
         return;
     }
@@ -872,7 +872,7 @@ async function handleLineEvent(event) {
                 userId: userId,
                 sourceId: sourceId,
                 imageCount: imagesToPush.length
-            }).catch(() => {});
+            }).catch(() => { });
             return;
         }
     }
@@ -987,7 +987,7 @@ async function handleCouponRequest(payload) {
                     excludeCodesForMdh.push(String(r.couponCode).trim().toUpperCase());
                 }
             });
-        } catch (e) {}
+        } catch (e) { }
     }
 
     // Tìm mã coupon chưa sử dụng trong Firebase (loại trừ các mã đã từng cấp cho MĐH này)
@@ -1191,7 +1191,7 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
     let targetReq = null;
     if (quotedMessageId) {
         targetReq = candidateList.find(r => r.messageId === quotedMessageId) ||
-                    pendingList.find(r => r.messageId === quotedMessageId);
+            pendingList.find(r => r.messageId === quotedMessageId);
 
         // Nếu admin quote tin nhắn phản hồi của Bot (chứ không quote tin form của user)
         if (!targetReq) {
