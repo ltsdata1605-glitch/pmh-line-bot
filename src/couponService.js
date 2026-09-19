@@ -171,7 +171,7 @@ const couponService = {
                 `📉 Số lượng còn lại: ${remaining} mã!`,
                 `⚡ Cảnh báo: ${tierTitle}`,
                 `━━━━━━━━━━━━━━━━━━━━━`,
-                `👉 Quản lý / Admin vui lòng nạp thêm mã vào kho sớm để tránh gián đoạn duyệt đơn.`
+                `👉 Quản lý vui lòng xin phiếu hoặc kiểm tra tồn trước khi tư vấn!`
             ].join(NL);
 
             const targets = new Set();

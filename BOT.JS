@@ -2310,7 +2310,7 @@ function checkAndSendLowStockAlert_(couponSheet, loaiPMHJustIssued) {
                 const dispName = pmhMapping[item.type] || item.type;
                 return '• ' + dispName + ' (' + item.type + '): còn ' + item.count + ' mã!';
             }).join(NL) + NL + NL +
-            '👉 Quản lý vui lòng báo Admin nạp thêm mã để tránh gián đoạn duyệt đơn.';
+            '👉 Quản lý vui lòng xin phiếu hoặc kiểm tra tồn trước khi tư vấn!';
 
         const props = PropertiesService.getScriptProperties();
         const chatIdsText = props.getProperty('ACTIVE_CHAT_IDS');
