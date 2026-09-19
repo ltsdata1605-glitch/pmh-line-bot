@@ -9,23 +9,27 @@ const lineClient = {
     client,
 
     /**
-     * Trả lời tin nhắn người dùng bằng official @line/bot-sdk
+     * Trả lời tin nhắn người dùng bằng official @line/bot-sdk (hỗ trợ trích dẫn tin nhắn quoteToken)
      */
-    async replyText(replyToken, text) {
+    async replyText(replyToken, text, quoteToken = null) {
         if (!replyToken || !text) return false;
 
         const cleanText = String(text).trim();
+        const messageObj = {
+            type: 'text',
+            text: cleanText
+        };
+
+        if (quoteToken && typeof quoteToken === 'string' && quoteToken.trim()) {
+            messageObj.quoteToken = quoteToken.trim();
+        }
+
         try {
             await client.replyMessage({
                 replyToken: replyToken,
-                messages: [
-                    {
-                        type: 'text',
-                        text: cleanText
-                    }
-                ]
+                messages: [messageObj]
             });
-            console.log('[LINE] Phản hồi tin nhắn thành công qua @line/bot-sdk!');
+            console.log('[LINE] Phản hồi tin nhắn (trích dẫn) thành công qua @line/bot-sdk!');
             return true;
         } catch (error) {
             const Firebase = require('./firebase');
