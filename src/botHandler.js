@@ -554,9 +554,27 @@ async function handleCouponRequest(payload) {
             approvedBy: 'BOT_AUTO'
         });
 
+        // Kiểm tra số lượng tồn còn lại để đính kèm cảnh báo trực tiếp vào tin phát mã
+        const remaining = await Firebase.getUnusedCountByType(data.loaiPMH);
+        let stockHint = '';
+        if (remaining === 0) {
+            stockHint = `${NL}(🚨 Chú ý: Kho đã HẾT MÃ ${data.loaiPMH} sau lượt phát này!)`;
+        } else if (remaining < CONFIG.LOW_STOCK_THRESHOLDS.CRITICAL) {
+            stockHint = `${NL}(🔴 Cảnh báo khẩn: Kho ${data.loaiPMH} chỉ còn ${remaining} mã!)`;
+        } else if (remaining < CONFIG.LOW_STOCK_THRESHOLDS.HIGH) {
+            stockHint = `${NL}(🟠 Cần nạp gấp: Kho ${data.loaiPMH} còn ${remaining} mã!)`;
+        } else if (remaining < CONFIG.LOW_STOCK_THRESHOLDS.WARNING) {
+            stockHint = `${NL}(🟡 Sắp hết: Kho ${data.loaiPMH} còn ${remaining} mã!)`;
+        }
+
         // Trả lời phát mã trích dẫn ngay lập tức
-        const sendMsg = `${displayName}${NL}➜ PMH ${data.loaiPMH} : ${coupon.code}`;
+        const sendMsg = `${displayName}${NL}➜ PMH ${data.loaiPMH} : ${coupon.code}${stockHint}`;
         await lineClient.replyText(payload.replyToken, sendMsg, payload.quoteToken);
+
+        // Kích hoạt cảnh báo tự động tới các nhóm & admin (nếu chạm mốc < 30, < 20, < 10, = 0)
+        couponService.checkAndSendLowStockAlert(data.loaiPMH, payload.sourceId).catch(err => {
+            console.error('[BotHandler] Lỗi checkAndSendLowStockAlert:', err.message);
+        });
     } else {
         // Tạm giữ mã hoặc lưu yêu cầu chờ Admin duyệt
         await Firebase.createRequest({
@@ -627,14 +645,33 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
             approvedBy: adminUserId
         });
 
-        const replyMsg = `${targetReq.displayName}${NL}➜ PMH ${targetReq.loaiPMH} : ${couponCode}`;
+        // Kiểm tra số lượng tồn còn lại
+        const remaining = await Firebase.getUnusedCountByType(targetReq.loaiPMH);
+        let stockHint = '';
+        if (remaining === 0) {
+            stockHint = `${NL}(🚨 Chú ý: Kho đã HẾT MÃ ${targetReq.loaiPMH} sau lượt phát này!)`;
+        } else if (remaining < CONFIG.LOW_STOCK_THRESHOLDS.CRITICAL) {
+            stockHint = `${NL}(🔴 Cảnh báo khẩn: Kho ${targetReq.loaiPMH} chỉ còn ${remaining} mã!)`;
+        } else if (remaining < CONFIG.LOW_STOCK_THRESHOLDS.HIGH) {
+            stockHint = `${NL}(🟠 Cần nạp gấp: Kho ${targetReq.loaiPMH} còn ${remaining} mã!)`;
+        } else if (remaining < CONFIG.LOW_STOCK_THRESHOLDS.WARNING) {
+            stockHint = `${NL}(🟡 Sắp hết: Kho ${targetReq.loaiPMH} còn ${remaining} mã!)`;
+        }
+
+        const replyMsg = `${targetReq.displayName}${NL}➜ PMH ${targetReq.loaiPMH} : ${couponCode}${stockHint}`;
         await lineClient.replyText(replyToken, replyMsg, quoteToken);
+
+        // Kích hoạt cảnh báo tự động tới các nhóm & admin
+        couponService.checkAndSendLowStockAlert(targetReq.loaiPMH, payload.sourceId).catch(err => {
+            console.error('[BotHandler] Lỗi checkAndSendLowStockAlert:', err.message);
+        });
         return;
     }
 
     // Nếu gõ lệnh duyệt hàng loạt
     let approvedCount = 0;
     const results = [];
+    const approvedTypes = new Set();
 
     for (const req of pendingList) {
         let couponCode = req.couponCode;
@@ -666,6 +703,7 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
                 approvedBy: adminUserId
             });
             results.push(`${req.displayName}${NL}➜ PMH ${req.loaiPMH} : ${couponCode}`);
+            approvedTypes.add(req.loaiPMH);
             approvedCount++;
         }
     }
@@ -676,6 +714,13 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
             fullMsg += `${NL}━━━━━━━━━━━━━${NL}💡 Hãy chuyển tiếp tin nhắn này cho BOT để lọc nhanh PMH của bạn!`;
         }
         await lineClient.replyText(replyToken, fullMsg, quoteToken);
+
+        // Kích hoạt cảnh báo cho các loại mã vừa được duyệt phát
+        for (const t of approvedTypes) {
+            couponService.checkAndSendLowStockAlert(t, payload.sourceId).catch(err => {
+                console.error('[BotHandler] Lỗi checkAndSendLowStockAlert (batch):', err.message);
+            });
+        }
     } else {
         await lineClient.replyText(replyToken, '❌ Không thể duyệt vì các loại PMH trong danh sách chờ đã hết mã.', quoteToken);
     }

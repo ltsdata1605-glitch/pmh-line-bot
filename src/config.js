@@ -24,8 +24,13 @@ const CONFIG = {
     REQUEST_STATUS_OUT_OF_STOCK: 'Hết mã',
     REQUEST_STATUS_ERROR: 'Lỗi',
 
-    // Cảnh báo sắp hết mã
-    LOW_STOCK_THRESHOLD: 5
+    // Ngưỡng cảnh báo tự động khi số lượng mã < 30, < 20, < 10
+    LOW_STOCK_THRESHOLDS: {
+        WARNING: 30,   // Cảnh báo mốc 1: Dưới 30 mã (Vàng)
+        HIGH: 20,      // Cảnh báo mốc 2: Dưới 20 mã (Cam)
+        CRITICAL: 10   // Cảnh báo mốc 3: Dưới 10 mã (Đỏ khẩn cấp)
+    },
+    LOW_STOCK_THRESHOLD: 30
 };
 
 module.exports = CONFIG;

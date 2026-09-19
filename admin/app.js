@@ -369,6 +369,7 @@ function renderDashboard() {
 function renderDashboardStockList() {
     const tbody = document.getElementById('stock-by-type-tbody');
     const emptyState = document.getElementById('stock-type-empty-state');
+    const warningBanner = document.getElementById('stock-warning-banner');
     if (!tbody) return;
 
     const typeMap = appState.dashboardTypeMap || {};
@@ -379,11 +380,73 @@ function renderDashboardStockList() {
 
     const allTypeNames = Object.keys(typeMap);
     if (allTypeNames.length === 0) {
+        if (warningBanner) warningBanner.style.display = 'none';
         if (emptyState) {
             emptyState.classList.remove('hidden');
             emptyState.querySelector('p').innerText = 'Chưa có loại mã nào trong kho. Vào tab "Kho Mã Coupon" để nạp dữ liệu.';
         }
         return;
+    }
+
+    // Phân loại các nhóm cảnh báo (<30, <20, <10, 0)
+    const outList = [];
+    const criticalList = [];
+    const highList = [];
+    const warningList = [];
+
+    allTypeNames.forEach(t => {
+        const u = typeMap[t].unused;
+        if (u === 0) outList.push({ name: t, count: u });
+        else if (u < 10) criticalList.push({ name: t, count: u });
+        else if (u < 20) highList.push({ name: t, count: u });
+        else if (u < 30) warningList.push({ name: t, count: u });
+    });
+
+    // Render Banner Cảnh Báo Tự Động
+    if (warningBanner) {
+        const totalAlerts = outList.length + criticalList.length + highList.length + warningList.length;
+        if (totalAlerts > 0) {
+            warningBanner.style.display = 'block';
+
+            let chipsHtml = '';
+            criticalList.forEach(item => {
+                chipsHtml += `<span class="warning-chip critical" onclick="filterDashboardStockType('${item.name}')" title="Bấm để lọc mã ${item.name}"><i class="fa-solid fa-circle-exclamation"></i> ${item.name}: <strong>${item.count} mã</strong></span>`;
+            });
+            highList.forEach(item => {
+                chipsHtml += `<span class="warning-chip high" onclick="filterDashboardStockType('${item.name}')" title="Bấm để lọc mã ${item.name}"><i class="fa-solid fa-triangle-exclamation"></i> ${item.name}: <strong>${item.count} mã</strong></span>`;
+            });
+            warningList.forEach(item => {
+                chipsHtml += `<span class="warning-chip warning" onclick="filterDashboardStockType('${item.name}')" title="Bấm để lọc mã ${item.name}"><i class="fa-solid fa-circle-notch"></i> ${item.name}: <strong>${item.count} mã</strong></span>`;
+            });
+            outList.forEach(item => {
+                chipsHtml += `<span class="warning-chip out" onclick="filterDashboardStockType('${item.name}')" title="Bấm để lọc mã ${item.name}"><i class="fa-solid fa-ban"></i> ${item.name}: 0 mã</span>`;
+            });
+
+            warningBanner.innerHTML = `
+                <div class="stock-warning-header">
+                    <div class="stock-warning-title">
+                        <i class="fa-solid fa-triangle-exclamation" style="font-size: 1.15rem; color: #EA580C;"></i>
+                        <span>Cảnh Báo Tồn Kho Sắp Hết (${totalAlerts} loại cần chú ý)</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn btn-primary btn-sm" onclick="openBulkImportModal()" style="font-size: 0.8rem; padding: 5px 12px;">
+                            <i class="fa-solid fa-plus"></i> Nạp Mã Ngay
+                        </button>
+                    </div>
+                </div>
+                <div class="stock-warning-chips">
+                    ${chipsHtml}
+                </div>
+            `;
+        } else {
+            warningBanner.style.display = 'block';
+            warningBanner.innerHTML = `
+                <div class="stock-safe-banner">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>Trạng thái kho rất tốt: Tất cả ${allTypeNames.length} loại PMH đều có số lượng tồn an toàn (&ge; 30 mã).</span>
+                </div>
+            `;
+        }
     }
 
     // Lọc theo search và trạng thái
@@ -393,14 +456,16 @@ function renderDashboardStockList() {
         }
 
         const unused = typeMap[typeName].unused;
-        if (filterVal === 'LOW' && (unused >= 5 || unused === 0)) return false;
+        if (filterVal === 'CRITICAL' && (unused >= 10 || unused === 0)) return false;
+        if (filterVal === 'HIGH' && (unused < 10 || unused >= 20)) return false;
+        if (filterVal === 'LOW' && (unused < 20 || unused >= 30)) return false;
         if (filterVal === 'OUT' && unused > 0) return false;
-        if (filterVal === 'OK' && unused < 5) return false;
+        if (filterVal === 'OK' && unused < 30) return false;
 
         return true;
     });
 
-    // Sắp xếp: Ưu tiên loại hết mã (unused === 0), rồi sắp hết (unused < 5), rồi theo số lượng tăng dần
+    // Sắp xếp ưu tiên: Hết mã (0) -> Cực thấp (<10) -> Cần nạp (<20) -> Sắp hết (<30) -> Theo số lượng tăng dần
     filteredTypes.sort((a, b) => {
         return typeMap[a].unused - typeMap[b].unused || a.localeCompare(b);
     });
@@ -418,24 +483,36 @@ function renderDashboardStockList() {
     filteredTypes.forEach((typeName, index) => {
         const data = typeMap[typeName];
         const isOut = data.unused === 0;
-        const isLow = data.unused > 0 && data.unused < 5;
+        const isCritical = data.unused > 0 && data.unused < 10;
+        const isHigh = data.unused >= 10 && data.unused < 20;
+        const isWarning = data.unused >= 20 && data.unused < 30;
         const fillPct = data.total > 0 ? Math.round((data.unused / data.total) * 100) : 0;
 
         let statusBadgeHtml = '';
         let unusedBadgeHtml = '';
+        let barColor = '#10B981';
 
         if (isOut) {
-            statusBadgeHtml = `<span class="status-badge" style="color: #DC2626;"><i class="fa-solid fa-circle-xmark"></i> Hết mã</span>`;
+            statusBadgeHtml = `<span class="status-badge" style="color: #DC2626; background: #FEF2F2; border: 1px solid #FECACA;"><i class="fa-solid fa-circle-xmark"></i> Hết mã (0)</span>`;
             unusedBadgeHtml = `<strong style="color: #DC2626; font-size: 0.95rem;">0</strong>`;
-        } else if (isLow) {
-            statusBadgeHtml = `<span class="status-badge" style="color: #D97706;"><i class="fa-solid fa-triangle-exclamation"></i> Sắp hết</span>`;
+            barColor = '#CBD5E1';
+        } else if (isCritical) {
+            statusBadgeHtml = `<span class="status-badge" style="color: #DC2626; background: #FEF2F2; border: 1px solid #FECACA;"><i class="fa-solid fa-circle-exclamation"></i> Khẩn cấp (&lt; 10)</span>`;
+            unusedBadgeHtml = `<strong style="color: #DC2626; font-size: 0.95rem;">${data.unused}</strong>`;
+            barColor = '#EF4444';
+        } else if (isHigh) {
+            statusBadgeHtml = `<span class="status-badge" style="color: #EA580C; background: #FFF7ED; border: 1px solid #FFEDD5;"><i class="fa-solid fa-triangle-exclamation"></i> Cần nạp (&lt; 20)</span>`;
+            unusedBadgeHtml = `<strong style="color: #EA580C; font-size: 0.95rem;">${data.unused}</strong>`;
+            barColor = '#F97316';
+        } else if (isWarning) {
+            statusBadgeHtml = `<span class="status-badge" style="color: #D97706; background: #FEF3C7; border: 1px solid #FDE68A;"><i class="fa-solid fa-triangle-exclamation"></i> Sắp hết (&lt; 30)</span>`;
             unusedBadgeHtml = `<strong style="color: #D97706; font-size: 0.95rem;">${data.unused}</strong>`;
+            barColor = '#F59E0B';
         } else {
-            statusBadgeHtml = `<span class="status-badge unused" style="color: #16A34A;"><i class="fa-solid fa-circle-check"></i> Khả dụng</span>`;
+            statusBadgeHtml = `<span class="status-badge unused" style="color: #16A34A; background: #F0FDF4; border: 1px solid #BBF7D0;"><i class="fa-solid fa-circle-check"></i> Khả dụng (&ge; 30)</span>`;
             unusedBadgeHtml = `<strong style="color: #16A34A; font-size: 0.95rem;">${data.unused}</strong>`;
+            barColor = '#10B981';
         }
-
-        const barColor = isOut ? '#CBD5E1' : isLow ? '#F59E0B' : '#10B981';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `

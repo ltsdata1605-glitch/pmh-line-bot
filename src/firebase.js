@@ -88,6 +88,29 @@ const Firebase = {
     },
 
     /**
+     * Đếm số lượng mã coupon chưa sử dụng của một loại PMH cụ thể
+     */
+    async getUnusedCountByType(loaiPMH) {
+        try {
+            const coupons = await this.getCoupons();
+            if (!coupons || coupons.length === 0) return 0;
+            const norm = String(loaiPMH || '').trim().toUpperCase();
+            let count = 0;
+            coupons.forEach(c => {
+                if (!c) return;
+                const cType = String(c.type || '').trim().toUpperCase();
+                if (cType === norm && (c.status === 'UNUSED' || !c.status)) {
+                    count++;
+                }
+            });
+            return count;
+        } catch (error) {
+            console.error('[Firebase] Lỗi getUnusedCountByType:', error.message);
+            return 0;
+        }
+    },
+
+    /**
      * Cập nhật mã coupon đã phát
      */
     async markCouponSent(identifier, info) {
