@@ -62,8 +62,19 @@ async function isAdmin(userId) {
 }
 
 function isAdminApprovalCommand(text) {
-    const t = String(text || '').trim().toUpperCase();
-    return t === CONFIG.APPROVAL_COMMAND || t === 'OK' || t === 'ALL';
+    if (!text) return false;
+    const t = String(text || '').normalize('NFC').trim().toUpperCase();
+    if (t === 'DUYỆT' || t === 'DUYET' || t === 'OK' || t === 'OKE' || t === 'OKAY' || t === 'ALL' || t === 'D' || t === 'K') {
+        return true;
+    }
+    if (CONFIG.APPROVAL_COMMAND && t === CONFIG.APPROVAL_COMMAND.normalize('NFC').trim().toUpperCase()) {
+        return true;
+    }
+    const clean = t.replace(/[.!?,]/g, '').trim();
+    if (clean === 'DUYỆT' || clean === 'DUYET' || clean === 'OK' || clean === 'OKE') {
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -299,6 +310,23 @@ async function handleLineEvent(event) {
         if (hasAdminPermission) {
             const quotedMsgId = event.message.quotedMessageId || null;
             await handleAdminApproval(userId, replyToken, sourceId, text, quotedMsgId, quoteToken);
+        } else {
+            console.log(`[BOT] User ${userId} không có quyền Admin để duyệt đơn.`);
+            try {
+                const reqs = await Firebase.getRequests();
+                const hasPending = reqs.some(r =>
+                    (r.status === CONFIG.REQUEST_STATUS_PENDING || r.status === 'Chờ duyệt đơn') &&
+                    (!r.chatId || r.chatId === sourceId)
+                );
+                if (hasPending) {
+                    const senderName = await lineClient.getDisplayName(userId, sourceId);
+                    await lineClient.replyText(
+                        replyToken,
+                        `⚠️ Tài khoản "${senderName || 'Thành viên'}" chưa có quyền Admin để duyệt đơn.\n👉 Quản trị viên vui lòng duyệt hoặc nhắn riêng "admin" cho BOT để kích hoạt quyền duyệt!`,
+                        quoteToken
+                    );
+                }
+            } catch (e) {}
         }
         return;
     }
@@ -790,8 +818,23 @@ async function handleCouponRequest(payload) {
         }
     }
 
-    // Tìm mã coupon chưa sử dụng trong Firebase
-    const coupon = await Firebase.findFirstUnusedCoupon(data.loaiPMH);
+    // Lấy danh sách tất cả các mã đã từng cấp cho MĐH này để loại trừ (không cấp lại mã cũ)
+    const excludeCodesForMdh = isReplaced && oldCode ? [String(oldCode).trim().toUpperCase()] : [];
+    if (isReplaced && data.mdh) {
+        try {
+            const allReqs = await Firebase.getRequests();
+            const cleanMdh = String(data.mdh).replace(/[\s\r\n\t]+/g, '').toUpperCase();
+            allReqs.forEach(r => {
+                const rMdh = String(r.mdh || '').replace(/[\s\r\n\t]+/g, '').toUpperCase();
+                if (rMdh === cleanMdh && r.couponCode) {
+                    excludeCodesForMdh.push(String(r.couponCode).trim().toUpperCase());
+                }
+            });
+        } catch (e) {}
+    }
+
+    // Tìm mã coupon chưa sử dụng trong Firebase (loại trừ các mã đã từng cấp cho MĐH này)
+    const coupon = await Firebase.findFirstUnusedCoupon(data.loaiPMH, excludeCodesForMdh);
 
     if (!coupon) {
         if (isReplaced) {
@@ -854,7 +897,10 @@ async function handleCouponRequest(payload) {
             chatId: payload.sourceId,
             approvedBy: isReplaced ? 'BOT_AUTO_REPLACE' : 'BOT_AUTO',
             isReplaced: isReplaced,
-            oldCode: oldCode
+            oldCode: oldCode,
+            oldType: oldType,
+            oldTime: oldTime,
+            oldRecipient: oldRecipient
         });
 
         // Kiểm tra số lượng tồn còn lại để đính kèm cảnh báo trực tiếp vào tin phát mã
@@ -919,11 +965,22 @@ async function handleCouponRequest(payload) {
             status: CONFIG.REQUEST_STATUS_PENDING,
             couponCode: coupon.code,
             couponId: couponId,
-            chatId: payload.sourceId
+            chatId: payload.sourceId,
+            isReplaced: isReplaced,
+            oldCode: oldCode || '',
+            oldType: oldType || '',
+            oldTime: oldTime || '',
+            oldRecipient: oldRecipient || ''
         });
 
-        // Phản hồi đã tiếp nhận và chờ admin duyệt
-        await lineClient.replyText(payload.replyToken, `⏳ Đã nhận yêu cầu PMH ${data.loaiPMH} (MĐH: ${data.mdh || '-'}). Đang chờ Admin duyệt...`, payload.quoteToken);
+        // Phản hồi đã tiếp nhận và đính kèm CẢNH BÁO TRÙNG MĐH nếu có
+        let pendingMsg = `⏳ Đã nhận yêu cầu PMH ${data.loaiPMH} (MĐH: ${data.mdh || '-'}). Đang chờ Admin duyệt...`;
+        if (isReplaced && oldCode) {
+            pendingMsg += `${NL}━━━━━━━━━━━━━━━━━━━━━${NL}` +
+                `⚠️ CẢNH BÁO TRÙNG MĐH: Đơn hàng "${data.mdh}" này đã từng được cấp mã "${oldCode}" (${oldType}) lúc ${oldTime} (${oldRecipient}).${NL}` +
+                `👉 Khi Admin duyệt (hoặc gõ "ok"), mã cũ sẽ tự động được THU HỒI vào kho và cấp mã mới!`;
+        }
+        await lineClient.replyText(payload.replyToken, pendingMsg, payload.quoteToken);
     }
 }
 
@@ -932,38 +989,119 @@ async function handleCouponRequest(payload) {
  */
 async function handleAdminApproval(adminUserId, replyToken, sourceId, commandText, quotedMessageId, quoteToken) {
     const requests = await Firebase.getRequests();
-    const pendingList = requests.filter(r => r.status === CONFIG.REQUEST_STATUS_PENDING);
+    const pendingList = requests.filter(r => r.status === CONFIG.REQUEST_STATUS_PENDING || r.status === 'Chờ duyệt đơn');
 
     if (pendingList.length === 0) {
         await lineClient.replyText(replyToken, 'Hiện tại không có yêu cầu nào đang nằm trong danh sách chờ duyệt.', quoteToken);
         return;
     }
 
-    // Nếu trích dẫn một tin nhắn cụ thể
+    // Lọc ưu tiên các yêu cầu trong phòng chat hiện tại (nếu có)
+    const pendingInChat = pendingList.filter(r => !r.chatId || r.chatId === sourceId);
+    const candidateList = pendingInChat.length > 0 ? pendingInChat : pendingList;
+
+    // Xác định xem có phải là duyệt 1 đơn cụ thể không:
+    // 1. Có Quoted message ID
+    // 2. Hoặc danh sách chỉ có đúng 1 đơn duy nhất trong phòng chat
+    let targetReq = null;
     if (quotedMessageId) {
-        const targetReq = pendingList.find(r => r.messageId === quotedMessageId);
+        targetReq = candidateList.find(r => r.messageId === quotedMessageId) ||
+                    pendingList.find(r => r.messageId === quotedMessageId);
+
+        // Nếu admin quote tin nhắn phản hồi của Bot (chứ không quote tin form của user)
         if (!targetReq) {
-            await lineClient.replyText(replyToken, '❌ Không tìm thấy yêu cầu chờ duyệt tương ứng với tin nhắn trích dẫn này.', quoteToken);
-            return;
+            if (candidateList.length === 1) {
+                targetReq = candidateList[0];
+            } else {
+                // Lấy đơn mới nhất trong nhóm chat này
+                targetReq = candidateList[candidateList.length - 1];
+            }
+        }
+    } else if (candidateList.length === 1) {
+        // Chỉ có đúng 1 đơn đang chờ duyệt trong nhóm -> Duyệt trực tiếp đơn đó
+        targetReq = candidateList[0];
+    }
+
+    // ==========================================
+    // TRƯỜNG HỢP 1: DUYỆT ĐƠN LẺ (SINGLE APPROVAL)
+    // ==========================================
+    if (targetReq) {
+        let isReplaced = !!targetReq.isReplaced;
+        let oldCode = targetReq.oldCode || '';
+        let oldType = targetReq.oldType || targetReq.loaiPMH || 'PMH';
+        let oldTime = targetReq.oldTime || '';
+        let oldRecipient = targetReq.oldRecipient || targetReq.displayName || 'Quản lý';
+
+        // Nếu đơn chưa được gắn cờ isReplaced lúc gửi form, kiểm tra lại qua couponService
+        if (!isReplaced && targetReq.mdh) {
+            const dupCheck = await couponService.checkDuplicateRequest(targetReq.userId, targetReq.loaiPMH, targetReq.mdh);
+            if (dupCheck.action === 'revoke_and_reissue' && dupCheck.existing) {
+                isReplaced = true;
+                oldCode = dupCheck.existing.couponCode || '';
+                oldType = dupCheck.existing.loaiPMH || targetReq.loaiPMH || 'PMH';
+                oldRecipient = dupCheck.existing.displayName || 'Quản lý';
+                try {
+                    const d = new Date(dupCheck.existing.createdAt || dupCheck.existing.updatedAt);
+                    const timeFormatter = new Intl.DateTimeFormat('vi-VN', {
+                        timeZone: 'Asia/Ho_Chi_Minh',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour12: false
+                    });
+                    oldTime = timeFormatter.format(d);
+                } catch (e) {
+                    oldTime = 'trước đó';
+                }
+            }
         }
 
-        let couponCode = targetReq.couponCode;
-        if (!couponCode) {
-            const coupon = await Firebase.findFirstUnusedCoupon(targetReq.loaiPMH);
+        // Nếu là đơn đổi mã do trùng MĐH: Thu hồi mã cũ về kho trước
+        if (isReplaced && oldCode) {
+            console.log(`[Admin Approval] Thu hồi mã cũ "${oldCode}" của MĐH ${targetReq.mdh}...`);
+            await Firebase.revokeCoupon(oldCode, `Admin duyệt thu hồi để cấp lại mã mới cho MĐH ${targetReq.mdh}`);
+        }
+
+        // Thu thập danh sách các mã đã từng cấp cho MĐH này để đảm bảo không bao giờ cấp lại mã cũ
+        const excludeCodes = isReplaced && oldCode ? [String(oldCode).trim().toUpperCase()] : [];
+        if (targetReq.mdh) {
+            const cleanMdh = String(targetReq.mdh).replace(/[\s\r\n\t]+/g, '').toUpperCase();
+            requests.forEach(r => {
+                const rMdh = String(r.mdh || '').replace(/[\s\r\n\t]+/g, '').toUpperCase();
+                if (rMdh === cleanMdh && r.couponCode) {
+                    excludeCodes.push(String(r.couponCode).trim().toUpperCase());
+                }
+            });
+        }
+
+        // Tìm mã coupon mới chưa sử dụng (loại trừ tất cả các mã cũ của đơn này)
+        let finalCouponCode = '';
+        let finalCouponId = undefined;
+
+        // Nếu đơn đã có couponCode pre-assigned và không nằm trong excludeCodes
+        if (targetReq.couponCode && !excludeCodes.includes(String(targetReq.couponCode).trim().toUpperCase())) {
+            finalCouponCode = targetReq.couponCode;
+            finalCouponId = targetReq.couponId;
+        }
+
+        if (!finalCouponCode) {
+            const coupon = await Firebase.findFirstUnusedCoupon(targetReq.loaiPMH, excludeCodes);
             if (!coupon) {
-                await lineClient.replyText(replyToken, `❌ Hết mã PMH loại "${targetReq.loaiPMH}".`, quoteToken);
+                await lineClient.replyText(
+                    replyToken,
+                    `❌ Hết mã PMH loại "${targetReq.loaiPMH}" trong kho để cấp cho MĐH ${targetReq.mdh}.`,
+                    quoteToken
+                );
                 return;
             }
-            couponCode = coupon.code;
-            const cId = coupon.index !== undefined ? coupon.index : coupon.key;
-            await Firebase.markCouponSent(cId, {
-                warehouse: targetReq.maKho,
-                orderId: targetReq.mdh,
-                recipient: targetReq.displayName,
-                recipientId: targetReq.userId
-            });
-        } else if (targetReq.couponId !== undefined) {
-            await Firebase.markCouponSent(targetReq.couponId, {
+            finalCouponCode = coupon.code;
+            finalCouponId = coupon.index !== undefined ? coupon.index : coupon.key;
+        }
+
+        // Đánh dấu mã đã phát trong Firebase
+        if (finalCouponId !== undefined) {
+            await Firebase.markCouponSent(finalCouponId, {
                 warehouse: targetReq.maKho,
                 orderId: targetReq.mdh,
                 recipient: targetReq.displayName,
@@ -971,10 +1109,16 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
             });
         }
 
+        // Cập nhật trạng thái yêu cầu sang ĐÃ PHÁT MÃ
         await Firebase.updateRequest(targetReq.id, {
             status: CONFIG.REQUEST_STATUS_SENT,
-            couponCode: couponCode,
-            approvedBy: adminUserId
+            couponCode: finalCouponCode,
+            approvedBy: adminUserId,
+            isReplaced: isReplaced,
+            oldCode: oldCode || '',
+            oldType: oldType || '',
+            oldTime: oldTime || '',
+            oldRecipient: oldRecipient || ''
         });
 
         // Kiểm tra số lượng tồn còn lại
@@ -990,14 +1134,30 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
             stockHint = `${NL}(🟡 Sắp hết: Kho ${targetReq.loaiPMH} còn ${remaining} mã!)`;
         }
 
-        const replyMsg = `${targetReq.displayName}${NL}➜ PMH ${targetReq.loaiPMH} : ${couponCode}${stockHint}`;
+        let replyMsg = '';
+        if (isReplaced && oldCode) {
+            replyMsg =
+                `🔄 THU HỒI & CẤP LẠI MÃ PMH (TRÙNG MĐH: ${targetReq.mdh})\n` +
+                `━━━━━━━━━━━━━━━━━━━━━\n` +
+                `ℹ️ Thông tin mã "${oldCode}" (${oldType}) vừa cấp lúc ${oldTime} cho ${oldRecipient} đã được THU HỒI vào kho.\n` +
+                `🎯 Mã mới được cấp là:\n` +
+                `${targetReq.displayName}\n` +
+                `➜ PMH ${targetReq.loaiPMH} : ${finalCouponCode}${stockHint}`;
+        } else {
+            replyMsg = `${targetReq.displayName}${NL}➜ PMH ${targetReq.loaiPMH} : ${finalCouponCode}${stockHint}`;
+        }
+
         const flexCard = lineClient.createCouponFlexCard({
             displayName: targetReq.displayName,
             loaiPMH: targetReq.loaiPMH,
-            code: couponCode,
+            code: finalCouponCode,
             mdh: targetReq.mdh,
             maKho: targetReq.maKho,
-            stockHint
+            stockHint,
+            isReplaced: isReplaced,
+            oldCode: oldCode,
+            oldType: oldType,
+            oldTime: oldTime
         });
 
         const ok = await lineClient.replyFlex(replyToken, replyMsg, flexCard, quoteToken);
@@ -1012,41 +1172,95 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
         return;
     }
 
-    // Nếu gõ lệnh duyệt hàng loạt
+    // ==========================================
+    // TRƯỜNG HỢP 2: DUYỆT HÀNG LOẠT (BATCH APPROVAL)
+    // ==========================================
     let approvedCount = 0;
     const results = [];
     const approvedTypes = new Set();
 
-    for (const req of pendingList) {
+    for (const req of candidateList) {
+        let isReplaced = !!req.isReplaced;
+        let oldCode = req.oldCode || '';
+        let oldType = req.oldType || req.loaiPMH || 'PMH';
+        let oldTime = req.oldTime || '';
+        let oldRecipient = req.oldRecipient || req.displayName || 'Quản lý';
+
+        if (!isReplaced && req.mdh) {
+            const dupCheck = await couponService.checkDuplicateRequest(req.userId, req.loaiPMH, req.mdh);
+            if (dupCheck.action === 'revoke_and_reissue' && dupCheck.existing) {
+                isReplaced = true;
+                oldCode = dupCheck.existing.couponCode || '';
+                oldType = dupCheck.existing.loaiPMH || req.loaiPMH || 'PMH';
+                oldRecipient = dupCheck.existing.displayName || 'Quản lý';
+                try {
+                    const d = new Date(dupCheck.existing.createdAt || dupCheck.existing.updatedAt);
+                    const timeFormatter = new Intl.DateTimeFormat('vi-VN', {
+                        timeZone: 'Asia/Ho_Chi_Minh',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour12: false
+                    });
+                    oldTime = timeFormatter.format(d);
+                } catch (e) {
+                    oldTime = 'trước đó';
+                }
+            }
+        }
+
+        if (isReplaced && oldCode) {
+            await Firebase.revokeCoupon(oldCode, `Admin duyệt thu hồi để cấp lại mã mới cho MĐH ${req.mdh}`);
+        }
+
+        const excludeCodes = isReplaced && oldCode ? [String(oldCode).trim().toUpperCase()] : [];
+        if (req.mdh) {
+            const cleanMdh = String(req.mdh).replace(/[\s\r\n\t]+/g, '').toUpperCase();
+            requests.forEach(r => {
+                const rMdh = String(r.mdh || '').replace(/[\s\r\n\t]+/g, '').toUpperCase();
+                if (rMdh === cleanMdh && r.couponCode) {
+                    excludeCodes.push(String(r.couponCode).trim().toUpperCase());
+                }
+            });
+        }
+
         let couponCode = req.couponCode;
-        if (!couponCode) {
-            const coupon = await Firebase.findFirstUnusedCoupon(req.loaiPMH);
+        let cId = req.couponId;
+        if (!couponCode || excludeCodes.includes(String(couponCode).trim().toUpperCase())) {
+            const coupon = await Firebase.findFirstUnusedCoupon(req.loaiPMH, excludeCodes);
             if (coupon) {
                 couponCode = coupon.code;
-                const cId = coupon.index !== undefined ? coupon.index : coupon.key;
-                await Firebase.markCouponSent(cId, {
-                    warehouse: req.maKho,
-                    orderId: req.mdh,
-                    recipient: req.displayName,
-                    recipientId: req.userId
-                });
+                cId = coupon.index !== undefined ? coupon.index : coupon.key;
+            } else {
+                couponCode = null;
             }
-        } else if (req.couponId !== undefined) {
-            await Firebase.markCouponSent(req.couponId, {
+        }
+
+        if (couponCode && cId !== undefined) {
+            await Firebase.markCouponSent(cId, {
                 warehouse: req.maKho,
                 orderId: req.mdh,
                 recipient: req.displayName,
                 recipientId: req.userId
             });
-        }
 
-        if (couponCode) {
             await Firebase.updateRequest(req.id, {
                 status: CONFIG.REQUEST_STATUS_SENT,
                 couponCode: couponCode,
-                approvedBy: adminUserId
+                approvedBy: adminUserId,
+                isReplaced: isReplaced,
+                oldCode: oldCode || '',
+                oldType: oldType || '',
+                oldTime: oldTime || '',
+                oldRecipient: oldRecipient || ''
             });
-            results.push(`${req.displayName}${NL}➜ PMH ${req.loaiPMH} : ${couponCode}`);
+
+            if (isReplaced && oldCode) {
+                results.push(`🔄 THU HỒI & CẤP LẠI (TRÙNG MĐH: ${req.mdh})${NL}ℹ️ Đã thu hồi mã "${oldCode}" (${oldTime})${NL}${req.displayName}${NL}➜ PMH ${req.loaiPMH} : ${couponCode}`);
+            } else {
+                results.push(`${req.displayName}${NL}➜ PMH ${req.loaiPMH} : ${couponCode}`);
+            }
             approvedTypes.add(req.loaiPMH);
             approvedCount++;
         }
@@ -1061,7 +1275,7 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
 
         // Kích hoạt cảnh báo cho các loại mã vừa được duyệt phát
         for (const t of approvedTypes) {
-            couponService.checkAndSendLowStockAlert(t, payload.sourceId).catch(err => {
+            couponService.checkAndSendLowStockAlert(t, sourceId).catch(err => {
                 console.error('[BotHandler] Lỗi checkAndSendLowStockAlert (batch):', err.message);
             });
         }

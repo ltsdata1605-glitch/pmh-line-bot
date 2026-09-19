@@ -231,21 +231,48 @@ const couponService = {
     async checkDuplicateRequest(userId, loaiPMH, mdh) {
         if (!mdh) return { action: 'allow' };
 
-        const requests = await Firebase.getRequests();
-        const normMdh = String(mdh).trim().toUpperCase();
-        const normType = String(loaiPMH).trim().toUpperCase();
+        const cleanMdh = (val) => String(val || '').replace(/[\s\r\n\t]+/g, '').toUpperCase();
+        const normMdh = cleanMdh(mdh);
+        if (!normMdh) return { action: 'allow' };
 
-        const duplicate = requests.slice().reverse().find(r => {
-            return String(r.mdh || '').trim().toUpperCase() === normMdh &&
-                (r.status === CONFIG.REQUEST_STATUS_SENT || r.status === 'SENT') &&
-                r.couponCode;
+        // 1. Kiểm tra trong danh sách requests (ưu tiên đơn gần nhất)
+        const requests = await Firebase.getRequests();
+        const duplicateReq = requests.slice().reverse().find(r => {
+            const rMdh = cleanMdh(r.mdh);
+            const isSent = r.status === CONFIG.REQUEST_STATUS_SENT || r.status === 'SENT' || r.status === 'Đã phát mã';
+            return rMdh === normMdh && isSent && r.couponCode;
         });
 
-        if (duplicate) {
+        if (duplicateReq) {
             return {
                 action: 'revoke_and_reissue',
-                existing: duplicate
+                existing: duplicateReq
             };
+        }
+
+        // 2. Fallback: Kiểm tra trực tiếp trong danh sách coupons (theo orderId)
+        try {
+            const coupons = await Firebase.getCoupons();
+            const dupCoupon = coupons.find(c => {
+                const cMdh = cleanMdh(c.orderId);
+                const isSent = c.status === 'SENT' || c.status === CONFIG.COUPON_STATUS_SENT;
+                return cMdh === normMdh && isSent && c.code;
+            });
+
+            if (dupCoupon) {
+                return {
+                    action: 'revoke_and_reissue',
+                    existing: {
+                        couponCode: dupCoupon.code,
+                        loaiPMH: dupCoupon.type || loaiPMH,
+                        displayName: dupCoupon.recipient || 'Quản lý',
+                        createdAt: dupCoupon.sentAt || dupCoupon.updatedAt || new Date().toISOString(),
+                        mdh: dupCoupon.orderId
+                    }
+                };
+            }
+        } catch (e) {
+            console.error('[couponService] Lỗi fallback kiểm tra coupons:', e.message);
         }
 
         return { action: 'allow' };

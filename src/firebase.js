@@ -57,26 +57,36 @@ const Firebase = {
     /**
      * Tìm mã coupon chưa sử dụng theo loại PMH
      */
-    async findFirstUnusedCoupon(loaiPMH) {
+    async findFirstUnusedCoupon(loaiPMH, excludeCodes = []) {
         try {
             const res = await axios.get(`${dbUrl}/coupons.json`, { timeout: 8000 });
             const coupons = res.data;
             if (!coupons) return null;
 
             const normType = String(loaiPMH || '').trim().toUpperCase();
+            const excludeList = (Array.isArray(excludeCodes) ? excludeCodes : [excludeCodes])
+                .filter(Boolean)
+                .map(c => String(c).trim().toUpperCase());
+            const excludeSet = new Set(excludeList);
 
             // Nếu là dạng mảng (Array)
             if (Array.isArray(coupons)) {
                 for (let i = 0; i < coupons.length; i++) {
                     const c = coupons[i];
                     if (c && c.status === 'UNUSED' && String(c.type || '').trim().toUpperCase() === normType) {
-                        return { index: i, ...c };
+                        const code = String(c.code || '').trim().toUpperCase();
+                        if (!excludeSet.has(code)) {
+                            return { index: i, ...c };
+                        }
                     }
                 }
             } else if (typeof coupons === 'object') {
                 for (const [key, c] of Object.entries(coupons)) {
                     if (c && c.status === 'UNUSED' && String(c.type || '').trim().toUpperCase() === normType) {
-                        return { key, ...c };
+                        const code = String(c.code || '').trim().toUpperCase();
+                        if (!excludeSet.has(code)) {
+                            return { key, ...c };
+                        }
                     }
                 }
             }
