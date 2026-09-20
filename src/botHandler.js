@@ -143,7 +143,7 @@ function parsePmhBlocks(text) {
     // Tách theo vạch phân cách phổ biến
     let rawBlocks = text.split(/[━─—\-\=_~]{3,}/).map(b => b.trim()).filter(Boolean);
 
-    // Nếu không có vạch phân cách mà có nhiều "➜ PMH", tách theo dòng trước "➜ PMH"
+    // Nếu không có vạch phân cách mà có nhiều "➜ PMH", tách theo dòng kết thúc ở "➜ PMH"
     if (rawBlocks.length <= 1 && (text.match(/➜\s*PMH/gi) || []).length > 1) {
         const lines = text.split(/\r?\n/);
         const entries = [];
@@ -151,24 +151,29 @@ function parsePmhBlocks(text) {
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
-            if (i + 1 < lines.length && /➜\s*PMH/i.test(lines[i + 1])) {
-                if (currentEntry.length > 0) {
-                    entries.push(currentEntry.join('\n'));
-                    currentEntry = [];
-                }
+            if (!line) continue;
+            if (line.includes('ADMIN ĐÃ DUYỆT') || line.includes('Hãy chuyển tiếp tin nhắn')) continue;
+
+            currentEntry.push(line);
+            if (/➜\s*PMH/i.test(line)) {
+                entries.push(currentEntry.join('\n'));
+                currentEntry = [];
             }
-            if (line) currentEntry.push(line);
         }
-        if (currentEntry.length > 0) entries.push(currentEntry.join('\n'));
+        if (currentEntry.length > 0 && currentEntry.some(l => /➜\s*PMH/i.test(l))) {
+            entries.push(currentEntry.join('\n'));
+        }
         if (entries.length > 1) rawBlocks = entries;
     }
 
-    // Lọc chỉ giữ các khối có chứa "➜ PMH"
-    return rawBlocks.filter(block => {
-        if (!/➜\s*PMH/i.test(block)) return false;
-        if (block.includes('Hãy chuyển tiếp tin nhắn này') && !block.includes(':')) return false;
-        return true;
-    });
+    // Lọc chỉ giữ các khối có chứa "➜ PMH" và làm sạch tiêu đề chung
+    return rawBlocks
+        .map(block => block.replace(/^.*?ADMIN ĐÃ DUYỆT[^\n]*\n?/is, '').replace(/\n?💡\s*Hãy chuyển tiếp[^\n]*/is, '').trim())
+        .filter(block => {
+            if (!/➜\s*PMH/i.test(block)) return false;
+            if (block.includes('Hãy chuyển tiếp tin nhắn này') && !block.includes(':')) return false;
+            return true;
+        });
 }
 
 /**
@@ -1090,13 +1095,7 @@ async function handleCouponRequest(payload) {
 
         let sendMsg = '';
         if (isReplaced && oldCode) {
-            sendMsg =
-                `🔄 THU HỒI & CẤP LẠI MÃ PMH (TRÙNG MĐH: ${data.mdh})\n` +
-                `━━━━━━━━━━━━━━━━━━━━━\n` +
-                `ℹ️ Thông tin mã "${oldCode}" (${oldType}) vừa cấp lúc ${oldTime} cho ${oldRecipient} đã được THU HỒI vào kho.\n` +
-                `🎯 Mã mới được cấp là:\n` +
-                `${displayName}\n` +
-                `➜ PMH ${data.loaiPMH} : ${coupon.code}${stockHint}`;
+            sendMsg = `🔄 Thu hồi mã cũ: ${oldCode} (Trùng MĐH)${NL}${displayName}${NL}➜ PMH ${data.loaiPMH} : ${coupon.code}${stockHint}`;
         } else {
             sendMsg = `${displayName}${NL}➜ PMH ${data.loaiPMH} : ${coupon.code}${stockHint}`;
         }
@@ -1335,13 +1334,7 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
 
         let replyMsg = '';
         if (isReplaced && oldCode) {
-            replyMsg =
-                `🔄 THU HỒI & CẤP LẠI MÃ PMH (TRÙNG MĐH: ${targetReq.mdh})\n` +
-                `━━━━━━━━━━━━━━━━━━━━━\n` +
-                `ℹ️ Thông tin mã "${oldCode}" (${oldType}) vừa cấp lúc ${oldTime} cho ${oldRecipient} đã được THU HỒI vào kho.\n` +
-                `🎯 Mã mới được cấp là:\n` +
-                `${targetReq.displayName}\n` +
-                `➜ PMH ${targetReq.loaiPMH} : ${finalCouponCode}${stockHint}`;
+            replyMsg = `🔄 Thu hồi mã cũ: ${oldCode} (Trùng MĐH)${NL}${targetReq.displayName}${NL}➜ PMH ${targetReq.loaiPMH} : ${finalCouponCode}${stockHint}`;
         } else {
             replyMsg = `${targetReq.displayName}${NL}➜ PMH ${targetReq.loaiPMH} : ${finalCouponCode}${stockHint}`;
         }
@@ -1468,7 +1461,7 @@ async function handleAdminApproval(adminUserId, replyToken, sourceId, commandTex
             });
 
             if (isReplaced && oldCode) {
-                results.push(`🔄 THU HỒI & CẤP LẠI (TRÙNG MĐH: ${req.mdh})${NL}ℹ️ Đã thu hồi mã "${oldCode}" (${oldTime})${NL}${req.displayName}${NL}➜ PMH ${req.loaiPMH} : ${couponCode}`);
+                results.push(`🔄 Thu hồi mã cũ: ${oldCode} (Trùng MĐH)${NL}${req.displayName}${NL}➜ PMH ${req.loaiPMH} : ${couponCode}`);
             } else {
                 results.push(`${req.displayName}${NL}➜ PMH ${req.loaiPMH} : ${couponCode}`);
             }
