@@ -1,0 +1,23 @@
+name: Render Keep-Alive (Chong Ngu Dong 24/7)
+
+on:
+  schedule:
+    # Chay dinh ky moi 10 phut de Render khong bao gio bi Idle Sleep sau 15 phut
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-render:
+    name: Keep Render Service Awake
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Health Endpoint
+        run: |
+          echo "Sending keep-alive ping to Render at $(date)..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://pmh-line-bot.onrender.com/api/health)
+          echo "Response HTTP Status: $STATUS"
+          if [ "$STATUS" -eq 200 ]; then
+            echo "Render service is warm and active!"
+          else
+            echo "Service responded with $STATUS or was sleeping, ping triggered wake up."
+          fi

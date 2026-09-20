@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const axios = require('axios');
 const CONFIG = require('./src/config');
 const { handleLineEvent } = require('./src/botHandler');
 const { setupCronJobs, executeSchedule, broadcastMessage } = require('./src/cronJobs');
@@ -33,7 +34,7 @@ app.get('/api/health', async (req, res) => {
     const syntax = await Firebase.getSyntax();
     res.json({
         status: 'OK',
-        version: '1.4.1',
+        version: '1.4.2',
         botName: 'DM_Tây Nam Bộ',
         tokenPrefix: CONFIG.CHANNEL_ACCESS_TOKEN.slice(0, 10),
         service: 'PMH LINE BOT & Web Admin',
@@ -42,6 +43,9 @@ app.get('/api/health', async (req, res) => {
         timestamp: new Date().toISOString()
     });
 });
+
+// 2.1 Lightweight ping endpoint
+app.get('/ping', (req, res) => res.status(200).send('pong'));
 
 // 2.0 Server-Sent Events (SSE) Realtime Stream cho Web Admin
 app.get('/api/realtime/stream', (req, res) => {
@@ -181,6 +185,18 @@ const server = app.listen(CONFIG.PORT, () => {
 
     // Kích hoạt tác vụ hẹn giờ
     setupCronJobs();
+
+    // Cơ chế Keep-Alive tự động giữ ấm máy chủ Render: Ping URL công khai mỗi 10 phút để tránh bị ngủ đông sau 15 phút không hoạt động
+    const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL || 'https://pmh-line-bot.onrender.com';
+    setInterval(async () => {
+        try {
+            const pingUrl = `${RENDER_EXTERNAL_URL.replace(/\/$/, '')}/api/health`;
+            await axios.get(pingUrl, { timeout: 15000 });
+            console.log(`[Keep-Alive] Đã gửi tín hiệu giữ ấm máy chủ Render thành công lúc ${new Date().toLocaleTimeString('vi-VN')}`);
+        } catch (err) {
+            console.warn(`[Keep-Alive] Tín hiệu giữ ấm:`, err.message);
+        }
+    }, 10 * 60 * 1000); // 10 phút / lần
 });
 
 // Xử lý tắt an toàn
