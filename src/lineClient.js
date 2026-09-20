@@ -384,30 +384,55 @@ const lineClient = {
                 type: 'box',
                 layout: 'vertical',
                 margin: 'md',
-                backgroundColor: '#F8FAFC',
-                cornerRadius: 'md',
-                borderWidth: '1px',
-                borderColor: '#CBD5E1',
+                backgroundColor: '#ECFDF5',
+                cornerRadius: 'lg',
+                borderWidth: '2px',
+                borderColor: '#06C755',
                 paddingAll: '12px',
                 alignItems: 'center',
+                action: {
+                    type: 'clipboard',
+                    label: 'Copy Mã',
+                    clipboardText: String(code || '').trim()
+                },
                 contents: [
                     {
                         type: 'text',
-                        text: `➜ PMH ${loaiPMH}`,
+                        text: `➜ PMH ${loaiPMH} (CHẠM ĐỂ COPY)`,
                         weight: 'bold',
-                        size: 'xs',
-                        color: '#64748B'
+                        size: 'xxs',
+                        color: '#06C755'
                     },
                     {
                         type: 'text',
                         text: String(code || '').trim(),
                         weight: 'bold',
                         size: 'xl',
-                        color: '#1E293B',
+                        color: '#0F172A',
                         align: 'center',
                         margin: 'xs'
                     }
                 ]
+            },
+            {
+                type: 'button',
+                style: 'primary',
+                color: '#06C755',
+                height: 'sm',
+                margin: 'md',
+                action: {
+                    type: 'clipboard',
+                    label: '📋 Chạm Để Copy Mã Coupon',
+                    clipboardText: String(code || '').trim()
+                }
+            },
+            {
+                type: 'text',
+                text: '💡 Chạm vào khung hoặc nút để tự động copy mã',
+                size: 'xxs',
+                color: '#94A3B8',
+                align: 'center',
+                margin: 'xs'
             },
             {
                 type: 'box',

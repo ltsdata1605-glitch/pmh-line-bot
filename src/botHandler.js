@@ -337,6 +337,83 @@ async function handleLineEvent(event) {
         return;
     }
 
+    // 1.25 Lệnh HƯỚNG DẪN SỬ DỤNG (hd, help, huong dan...) - Hỗ trợ cả trong nhóm lẫn chat riêng
+    if (/^(?:[./!]?(?:hd|help|huongdan|hướng dẫn|\?)|huong\s*dan|hdsd)$/i.test(lowerText)) {
+        const guideMsg =
+            `📖 HƯỚNG DẪN SỬ DỤNG BOT PMH ICT\n` +
+            `━━━━━━━━━━━━━━━━━━━━━\n` +
+            `📊 1. KIỂM TRA TỒN KHO MÃ:\n` +
+            `• "tk": Xem toàn bộ tồn kho tất cả sản phẩm\n` +
+            `• "tk event": Xem tồn kho PMH Event (kèm số e1, e2...)\n` +
+            `• "tk gvgs": Xem tồn kho PMH Giờ Vàng (kèm số gv1, gv2...)\n\n` +
+            `⚡ 2. XIN NHẬN MÃ COUPON (1-CHẠM TỰ COPY):\n` +
+            `• Cú pháp Event: e[STT] [MĐH]\n` +
+            `  ➜ Ví dụ: e4 12345678 (lấy mã Event cho sản phẩm số 4)\n` +
+            `• Cú pháp Giờ Vàng: gv[STT] [MĐH]\n` +
+            `  ➜ Ví dụ: gv2 87654321 (lấy mã Giờ Vàng cho sản phẩm số 2)\n` +
+            `💡 Chạm trực tiếp vào khung mã trên tin nhắn Flex để tự động copy!\n\n` +
+            `🔄 3. HƯỚNG DẪN HỦY MÃ (NẾU KHÔNG DÙNG):\n` +
+            `• Gõ: "huy [Mã coupon]" hoặc "huy [MĐH]"\n` +
+            `  ➜ Ví dụ: huy 6W43J4BI2S hoặc huy 12345678\n` +
+            `  ➜ Bot sẽ tự động thu hồi mã về kho để các bạn khác sử dụng.\n` +
+            `• Hoặc báo Quản lý bấm "Thu hồi về kho" trên Web Quản Trị.\n\n` +
+            `🎯 4. LỌC PMH CỦA BẠN (CHUYỂN TIẾP CHO BOT):\n` +
+            `• Chuyển tiếp tin nhắn gộp danh sách mã cho BOT (chat riêng 1-1).\n` +
+            `• Bot sẽ tự động nhận diện và trích xuất đúng các mã thuộc tên bạn.\n\n` +
+            `📋 5. CÁC CÚ PHÁP TIỆN ÍCH KHÁC:\n` +
+            `• "cp": Lấy danh sách mẫu cú pháp đăng ký chuẩn\n` +
+            `• "id": Tra cứu LINE User ID hoặc Group ID nhóm\n` +
+            `• "check [MĐH]": Tra cứu chi tiết đơn hàng (chat riêng)\n` +
+            `━━━━━━━━━━━━━━━━━━━━━\n` +
+            `💡 Mẹo: Luôn gõ "tk event" hoặc "tk gvgs" trước để biết sản phẩm còn mã không và lấy đúng số thứ tự!`;
+
+        const admin = await isAdmin(userId);
+        const quickReply = isPrivateChat ? lineClient.getQuickReplyMenu(admin) : null;
+        await lineClient.replyText(replyToken, guideMsg, quoteToken, quickReply, sourceId);
+        return;
+    }
+
+    // 1.26 Lệnh HỦY MÃ COUPON VỪA XIN (huy [mã coupon] hoặc huy [MĐH])
+    const cancelMatch = text.match(/^(?:[./!]?(?:huy|huỷ|tra|trả|revoke|cancel))\s+([A-Za-z0-9_-]{4,40})$/i);
+    if (cancelMatch) {
+        const target = cancelMatch[1].trim().toUpperCase();
+        try {
+            const coupons = await Firebase.getCoupons();
+            let found = null;
+            if (Array.isArray(coupons)) {
+                found = coupons.find(c => c && (String(c.code).trim().toUpperCase() === target || String(c.orderId).trim().toUpperCase() === target));
+            } else if (typeof coupons === 'object' && coupons) {
+                found = Object.values(coupons).find(c => c && (String(c.code).trim().toUpperCase() === target || String(c.orderId).trim().toUpperCase() === target));
+            }
+
+            if (found) {
+                const senderName = await lineClient.getDisplayName(userId, sourceId);
+                await Firebase.revokeCoupon(found.code, `Huỷ mã qua lệnh bot bởi ${senderName || 'Người dùng'}`);
+                const msg =
+                    `✅ ĐÃ THU HỒI MÃ VỀ KHO THÀNH CÔNG!\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `• Mã PMH: ${found.code}\n` +
+                    `• Sản phẩm: ${found.loaiPMH || found.productName || 'PMH'}\n` +
+                    `• MĐH đã huỷ: ${found.orderId || target}\n` +
+                    `• Người huỷ: ${senderName || 'Bạn'}\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `👉 Mã này đã trở về trạng thái "Chưa dùng" trong kho để nhân viên khác có thể sử dụng!`;
+                await lineClient.replyText(replyToken, msg, quoteToken, null, sourceId);
+            } else {
+                await lineClient.replyText(
+                    replyToken,
+                    `⚠️ Không tìm thấy mã coupon hoặc MĐH [${target}] trong danh sách đã cấp của kho!\n👉 Vui lòng kiểm tra lại chính xác mã coupon hoặc MĐH cần huỷ.`,
+                    quoteToken,
+                    null,
+                    sourceId
+                );
+            }
+        } catch (e) {
+            console.error('[BOT] Lỗi xử lý lệnh huỷ mã:', e.message);
+        }
+        return;
+    }
+
     // 1.3 Menu 1 Chạm & Trải Nghiệm Tương Tác Cao Cấp (chỉ chat 1-1)
     if (isPrivateChat && (lowerText === 'menu' || lowerText === 'help' || lowerText === 'hd' || lowerText === 'hướng dẫn' || lowerText === 'chào' || lowerText === 'chao' || lowerText === 'xin chào' || lowerText === 'hi' || lowerText === 'hello' || lowerText === 'start')) {
         const admin = await isAdmin(userId);
